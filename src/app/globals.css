@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@theme {
+  --color-blossom-50: #fdf2f8;
+  --color-blossom-100: #fce7f3;
+  --color-blossom-200: #fbcfe8;
+  --color-blossom-300: #f9a8d4;
+  --color-blossom-400: #f472b6;
+  --color-blossom-500: #ec4899;
+  --color-blossom-600: #db2777;
+  --color-sakura-50: #fff1f2;
+  --color-sakura-100: #ffe4e6;
+  --color-sakura-200: #fecdd3;
+  --color-sakura-300: #fda4af;
+  --color-leaf-50: #f0fdf4;
+  --color-leaf-100: #dcfce7;
+  --color-leaf-500: #22c55e;
+  --color-leaf-600: #16a34a;
+  --font-sans: var(--font-noto-sans-jp), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background: linear-gradient(180deg, var(--color-blossom-50) 0%, #ffffff 40%);
+  color: #1f2937;
+  min-height: 100vh;
+}
+
+@keyframes sakura-fall {
+  0% {
+    opacity: 0.9;
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(120px) rotate(180deg);
+  }
+}
+
+.sakura-petal {
+  animation: sakura-fall 0.9s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sakura-petal {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+@keyframes thank-you-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+.coach-thank-you-burst {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: thank-you-pop 0.8s ease-out forwards;
+}
+
+.coach-thank-you-glow {
+  position: absolute;
+  inset: -8px;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    rgba(251, 207, 232, 0.95) 0%,
+    rgba(252, 231, 243, 0.55) 45%,
+    rgba(252, 231, 243, 0) 75%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-thank-you-burst {
+    animation: none;
+    opacity: 1;
+  }
+}

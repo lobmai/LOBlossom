@@ -15,6 +15,32 @@ LOBlossom は「知識を増やす」のではなく、「理解を育て、花�
 - [開発企画書](docs/LOBlossom_企画書.md)
 - [レッスン1：be動詞（MVP設計）](docs/lessons/lesson01_be-verb.md)
 
+## 技術スタック
+
+- Next.js 15（App Router）
+- TypeScript
+- Tailwind CSS 4
+
+## 開発
+
+```bash
+# 依存関係のインストール
+npm install
+
+# 開発サーバー起動
+npm run dev
+```
+
+ブラウザで [http://localhost:3000](http://localhost:3000) を開いてください。
+
+```bash
+# 本番ビルド
+npm run build
+
+# Lint
+npm run lint
+```
+
 ## ステータス
 
-MVP 企画・レッスン設計フェーズ
+MVP 開発フェーズ — Web 版土台・6ステップ画面骨組み完成
