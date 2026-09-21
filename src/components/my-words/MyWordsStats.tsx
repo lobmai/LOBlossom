@@ -52,28 +52,35 @@ export function MyWordsStats({
         <p className="mt-1 text-xs font-medium">{ui.myWords.statsTotal}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        {FILTER_BUTTONS.map((button) => {
-          const on = visibility[button.status];
-          return (
-            <button
-              key={button.status}
-              type="button"
-              onClick={() => onToggle(button.status)}
-              aria-pressed={on}
-              className={`rounded-xl border px-3 py-3 text-center transition ${
-                on
-                  ? button.onClass
-                  : "border-gray-200 bg-gray-100 text-gray-400 opacity-60"
-              }`}
-            >
-              <p className="text-xl font-bold tabular-nums">
-                {counts[button.status]}
-              </p>
-              <p className="mt-1 text-[11px] leading-tight">{button.label}</p>
-            </button>
-          );
-        })}
+      <div>
+        <p className="text-sm font-bold text-gray-900">{ui.myWords.filterHeading}</p>
+        <p className="mt-1 text-xs text-gray-500">{ui.myWords.filterHint}</p>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          {FILTER_BUTTONS.map((button) => {
+            const on = visibility[button.status];
+            return (
+              <button
+                key={button.status}
+                type="button"
+                onClick={() => onToggle(button.status)}
+                aria-pressed={on}
+                className={`min-h-14 rounded-xl border px-3 py-3 text-center transition ${
+                  on
+                    ? button.onClass
+                    : "border-gray-200 bg-gray-100 text-gray-400 opacity-60"
+                }`}
+              >
+                <p className="text-xl font-bold tabular-nums">
+                  {counts[button.status]}
+                </p>
+                <p className="mt-1 text-[11px] leading-tight">{button.label}</p>
+                <p className="mt-1 text-[10px] font-medium leading-tight">
+                  {on ? ui.myWords.filterOn : ui.myWords.filterOff}
+                </p>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

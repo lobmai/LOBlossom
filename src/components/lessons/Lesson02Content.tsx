@@ -1,5 +1,26 @@
 import { EnLine } from "@/components/EnLine";
+import { SpeakButton } from "@/components/SpeakButton";
+import { SpeakableEnglish } from "@/components/SpeakableEnglish";
 import { SubjectLabel, WordGloss } from "@/components/WordGloss";
+
+function WordWithSpeak({
+  word,
+  meaning,
+  audioRef,
+}: {
+  word: string;
+  meaning: string;
+  audioRef: string;
+}) {
+  return (
+    <span className="inline-flex items-start gap-1 align-baseline">
+      <WordGloss word={word} meaning={meaning} />
+      <span className="mt-px shrink-0">
+        <SpeakButton audioRef={audioRef} buttonClassName="h-6 w-6 text-[11px]" />
+      </span>
+    </span>
+  );
+}
 
 function Highlight({ children }: { children: React.ReactNode }) {
   return (
@@ -46,7 +67,9 @@ export function Lesson02Content() {
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-blossom-100 bg-blossom-50/40 p-4">
             <p className="text-xs font-bold text-blossom-600">【be動詞】</p>
-            <p className="mt-2 font-mono text-sm text-gray-800">I am tired.</p>
+            <p className="mt-2 font-mono text-sm text-gray-800">
+              <SpeakableEnglish audioRef="lesson1.body.11">I am tired.</SpeakableEnglish>
+            </p>
             <p className="mt-1 text-xs text-gray-600">私は疲れています。</p>
             <p className="mt-2 text-xs leading-relaxed text-gray-500">
               → 「です・います・状態」などを表す
@@ -54,7 +77,9 @@ export function Lesson02Content() {
           </div>
           <div className="rounded-xl border border-blossom-100 bg-blossom-50/40 p-4">
             <p className="text-xs font-bold text-blossom-600">【一般動詞】</p>
-            <p className="mt-2 font-mono text-sm text-gray-800">I play tennis.</p>
+            <p className="mt-2 font-mono text-sm text-gray-800">
+              <SpeakableEnglish audioRef="lesson2.body.01">I play tennis.</SpeakableEnglish>
+            </p>
             <p className="mt-1 text-xs text-gray-600">私はテニスをします。</p>
             <p className="mt-2 text-xs leading-relaxed text-gray-500">
               → 「する・食べる・好き」などを表す
@@ -74,19 +99,24 @@ export function Lesson02Content() {
         <p className="mt-4 text-sm leading-relaxed text-gray-700">例えば、こんな言葉があるよ。</p>
         <ul className="mt-4 space-y-2 text-sm text-gray-700">
           <li>
-            <WordGloss word="play" meaning="する" /> — play tennis（テニスをする）
+            <WordWithSpeak word="play" meaning="する" audioRef="mywords.play" />{" "}
+            — play tennis（テニスをする）
           </li>
           <li>
-            <WordGloss word="eat" meaning="食べる" /> — eat lunch（昼ごはんを食べる）
+            <WordWithSpeak word="eat" meaning="食べる" audioRef="mywords.eat" />{" "}
+            — eat lunch（昼ごはんを食べる）
           </li>
           <li>
-            <WordGloss word="like" meaning="好き" /> — like music（音楽が好き）
+            <WordWithSpeak word="like" meaning="好き" audioRef="mywords.like" />{" "}
+            — like music（音楽が好き）
           </li>
           <li>
-            <WordGloss word="go" meaning="行く" /> — go to school（学校へ行く）
+            <WordWithSpeak word="go" meaning="行く" audioRef="mywords.go" />{" "}
+            — go to school（学校へ行く）
           </li>
           <li>
-            <WordGloss word="study" meaning="勉強する" /> — study English（英語を勉強する）
+            <WordWithSpeak word="study" meaning="勉強する" audioRef="mywords.study" />{" "}
+            — study English（英語を勉強する）
           </li>
         </ul>
       </section>

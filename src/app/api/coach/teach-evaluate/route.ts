@@ -5,6 +5,7 @@ import {
 } from "@/lib/coach-teach-evaluate";
 import { isOpenAiApiKeyConfigured } from "@/lib/openai-config";
 import { getOpenAiErrorResponse, logOpenAiError } from "@/lib/openai-errors";
+import { logPerfElapsed, perfLog, startPerfTimer } from "@/lib/perf-log";
 
 function isValidHistory(
   history: unknown,
@@ -35,6 +36,8 @@ function isValidBody(body: unknown): body is TeachEvaluateRequest {
 }
 
 export async function POST(request: Request) {
+  const routeStartedAt = startPerfTimer();
+  perfLog("teach-evaluate", "server route start");
   try {
     if (!isOpenAiApiKeyConfigured()) {
       return NextResponse.json(
@@ -54,9 +57,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "invalid_request" }, { status: 400 });
     }
 
-    const startedAt = Date.now();
     const result = await evaluateTeachAnswer(body);
-    console.info(`[coach/teach-evaluate] openai ${Date.now() - startedAt}ms`);
+    logPerfElapsed("teach-evaluate", "server route total", routeStartedAt);
     return NextResponse.json(result);
   } catch (error) {
     logOpenAiError("coach/teach-evaluate", error);

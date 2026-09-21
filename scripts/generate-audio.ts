@@ -72,13 +72,13 @@ function parseLessonArg(): LessonAudioKey | null {
   const arg = process.argv.find((a) => a.startsWith("--lesson="));
   if (!arg) return null;
   const key = arg.slice("--lesson=".length).trim();
-  if (key === "lesson1" || key === "lesson2") return key;
+  if (key === "lesson1" || key === "lesson2" || key === "lesson3" || key === "lesson4" || key === "lesson5") return key;
   return null;
 }
 
 async function syncManifestFromDisk(manifestSet: Set<string>): Promise<number> {
   let added = 0;
-  for (const lessonKey of ["lesson1", "lesson2"] as LessonAudioKey[]) {
+  for (const lessonKey of ["lesson1", "lesson2", "lesson3", "lesson4", "lesson5"] as LessonAudioKey[]) {
     const dir = path.join(PUBLIC_AUDIO, lessonKey);
     try {
       const files = await fs.readdir(dir);

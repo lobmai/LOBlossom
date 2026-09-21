@@ -16,6 +16,13 @@ export interface SummaryPolishItem {
 
 import type { CoachOverallLevel } from "@/lib/coach-rubric/types";
 
+/** Step 4：自作例文の文法チェック（optional・旧評価互換） */
+export type UserExampleCheck = {
+  isCorrect: boolean;
+  correctedExample: string | null;
+  errorReason: string | null;
+};
+
 /** Step 4：AIコーチによるまとめの評価 */
 export interface AiEvaluation {
   overallMessage: string;
@@ -24,6 +31,8 @@ export interface AiEvaluation {
   hasPolish: boolean;
   evaluatedAt: string;
   unclearAdvice?: string | null;
+  /** Step3「分からなかったところ」への説明。疑問がなければ null */
+  unknownQuestionAnswer?: string | null;
   /** Phase5b：理解できている点 */
   strengths?: string[];
   /** Phase5b：一部不足（該当なしは [] または省略） */
@@ -34,6 +43,8 @@ export interface AiEvaluation {
   nextQuestion?: string | null;
   /** Phase5b：全体の理解度 */
   overallLevel?: CoachOverallLevel;
+  /** 自作例文チェック（取得できないときは省略または null） */
+  userExampleCheck?: UserExampleCheck | null;
   /** 旧フロー互換 */
   goodPoints?: string[];
   improvementPoints?: string[];
@@ -96,6 +107,7 @@ export type TeachEvaluateResult = {
   paraphrase?: string | null;
   closingMessage?: string | null;
   followUpQuestion?: string | null;
+  followUpSentence?: string | null;
   targetRubricPointId?: string | null;
   teachContent?: string | null;
 };
@@ -126,8 +138,18 @@ export interface LessonRecord {
   coachSession?: CoachSession | null;
   /** Step 6：完成した最終まとめ */
   finalSummary: LabeledAnswer[] | null;
-  /** Step 6：自作例文の日本語訳（完成まとめ生成時に保存） */
+  /** Step 4：最終例文が確定したときの日本語訳。未取得の旧レコードは省略 */
   userExampleJapanese?: string | null;
+  /** userExampleJapanese がどの英文に対する訳か。未取得の旧レコードは省略 */
+  userExampleJapaneseFor?: string | null;
+  /** My Loop に出す確定例文（正しい原文 or 修正版）。未取得の旧レコードは省略 */
+  userExampleFinal?: string | null;
+  /** 間違っていた場合の簡潔な理由 */
+  userExampleCorrectionReason?: string | null;
+  /** 自作例文が文法的に正しいか。未判定の旧レコードは省略 */
+  userExampleIsCorrect?: boolean | null;
+  /** My Loop「大事だと思ったこと」の整形済み文章。未取得の旧レコードは省略 */
+  myPointsFinal?: string | null;
   feeling: FeelingId | null;
   feelingLabel: string | null;
   aiEvaluation: AiEvaluation | null;

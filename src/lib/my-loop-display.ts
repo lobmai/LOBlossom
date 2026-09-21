@@ -9,6 +9,7 @@ import {
 import {
   getValidUserExample,
   isMeaningfulText,
+  isValidUserExample,
 } from "@/lib/answer-quality";
 import { formatLesson01SummaryForMyLoop } from "@/lib/build-lesson01-final-summary";
 import {
@@ -22,8 +23,15 @@ function trajectoryMap(record: LessonRecord): Record<string, string> {
   return Object.fromEntries(record.trajectoryEntries.map((e) => [e.id, e.answer]));
 }
 
-/** Step3 / 完成まとめから「大事だと思ったこと」（Coach回答優先） */
+/**
+ * Step3 / 完成まとめから「大事だと思ったこと」
+ * 1. myPointsFinal（Step6 polish 済み）
+ * 2. 旧レコード: L1 final-l1-my-points / L2 points / L3 coachAnswer
+ */
 export function getMyPoints(record: LessonRecord): string {
+  const storedFinal = record.myPointsFinal?.trim() ?? "";
+  if (storedFinal && isMeaningfulText(storedFinal)) return storedFinal;
+
   const finalItems = record.finalSummary ?? [];
 
   if (isLesson01StructuredFinalSummary(finalItems)) {
@@ -31,15 +39,20 @@ export function getMyPoints(record: LessonRecord): string {
     if (fromFinal && isMeaningfulText(fromFinal)) return fromFinal;
   }
 
+  const isLesson03 = record.lessonId === "lesson-03-present-perfect";
+  if (!isLesson03) {
+    const fromStep3 = trajectoryMap(record)["points"]?.trim() ?? "";
+    if (isMeaningfulText(fromStep3)) return fromStep3;
+  }
+
   if (record.coachAnswer?.trim() && isMeaningfulText(record.coachAnswer)) {
     return record.coachAnswer.trim();
   }
 
-  const raw = trajectoryMap(record)["points"]?.trim() ?? "";
-  return isMeaningfulText(raw) ? raw : "";
+  return "";
 }
 
-/** Step3 で入力した自作例文の日本語訳 */
+/** 最終例文の保存済み日本語訳。未保存の旧レコードは空文字 */
 export function getMyExampleJapanese(record: LessonRecord): string {
   if (record.userExampleJapanese?.trim()) {
     return record.userExampleJapanese.trim();
@@ -47,8 +60,13 @@ export function getMyExampleJapanese(record: LessonRecord): string {
   return "";
 }
 
-/** 自作例文（有効なもののみ。完成まとめ優先） */
+/** 自作例文（有効なもののみ。確定例文 → Lesson1完成まとめ → Step3原文） */
 export function getMyExampleSentence(record: LessonRecord): string {
+  const storedFinal = record.userExampleFinal?.trim() ?? "";
+  if (storedFinal && isValidUserExample(storedFinal)) {
+    return storedFinal;
+  }
+
   const finalItems = record.finalSummary ?? [];
 
   if (isLesson01StructuredFinalSummary(finalItems)) {
@@ -118,6 +136,21 @@ export function getLessonNumber(record: LessonRecord): number | null {
 export function getLessonReviewPath(record: LessonRecord): string {
   const n = getLessonNumber(record);
   return n ? getLessonBasePath(n) : "/lessons";
+}
+
+/** Step6 と My Loop で同じ最終表示を作る */
+export function getMyLoopSavedFields(record: LessonRecord): {
+  summary: string;
+  points: string;
+  example: string;
+  exampleJa: string;
+} {
+  return {
+    summary: getMySummary(record),
+    points: getMyPoints(record),
+    example: getMyExampleSentence(record),
+    exampleJa: getMyExampleJapanese(record),
+  };
 }
 
 export function formatStudyDate(iso: string): string {

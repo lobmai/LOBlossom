@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SpeakableExample } from "@/components/SpeakableExample";
 import { SaveErrorBanner } from "@/components/SaveErrorBanner";
@@ -16,6 +16,13 @@ import {
 import { isSummaryComplete, hasLowQualityFields } from "@/lib/summary-validation";
 import { ui } from "@/lib/ui-text";
 import { useLessonDraft } from "@/lib/use-lesson-draft";
+import {
+  markNavStart,
+  measureFromNavStart,
+  perfLog,
+  logPerfElapsed,
+  startPerfTimer,
+} from "@/lib/perf-log";
 
 const inputClassName =
   "w-full resize-y rounded-xl border border-gray-200 p-3 text-base leading-relaxed text-gray-800 placeholder:text-gray-400 focus:border-blossom-300 focus:outline-none focus:ring-2 focus:ring-blossom-100 sm:text-sm";
@@ -34,6 +41,15 @@ export function SummarizeForm({ lessonNumber }: { lessonNumber: number }) {
   const [hydrated, setHydrated] = useState(false);
   const [showEmptyHint, setShowEmptyHint] = useState(false);
   const [navigating, setNavigating] = useState(false);
+  const mountLoggedRef = useRef(false);
+  const mountAtRef = useRef(0);
+
+  if (!mountLoggedRef.current) {
+    mountLoggedRef.current = true;
+    mountAtRef.current = startPerfTimer();
+    perfLog("summarize", "SummarizeForm mount");
+    measureFromNavStart("check-to-summarize", "click → mount");
+  }
 
   useLayoutEffect(() => {
     if (isReady && !hydrated) {
@@ -44,6 +60,9 @@ export function SummarizeForm({ lessonNumber }: { lessonNumber: number }) {
           : { [UNCLEAR_CHOICE_ID]: "none" },
       );
       setHydrated(true);
+      perfLog("summarize", "form ready (isReady + hydrated)");
+      logPerfElapsed("summarize", "mount → form ready", mountAtRef.current);
+      measureFromNavStart("check-to-summarize", "click → form visible");
     }
   }, [isReady, hydrated, getInitialTrajectoryValues]);
 
@@ -83,6 +102,9 @@ export function SummarizeForm({ lessonNumber }: { lessonNumber: number }) {
     }
     setNavigating(true);
     persist(entries);
+    markNavStart("summarize-to-evaluate");
+    perfLog("summarize", "router.push(evaluate)");
+    measureFromNavStart("summarize-to-evaluate", "click → router.push");
     router.push(getLessonStepPath(lessonNumber, "evaluate"));
   }
 

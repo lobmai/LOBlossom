@@ -97,6 +97,17 @@ export const lesson01CheckQuestions: CheckQuestion[] = [
     exampleSentence: "Are you a student?",
     translation: "あなたは学生ですか？",
   },
+  {
+    id: "q7",
+    type: "choice",
+    question: "Are you tired? 自然な返事はどれ？",
+    options: ["Yes, I am.", "Yes, I do.", "Yes, I have.", "Yes, I did."],
+    answer: "Yes, I am.",
+    explanation:
+      "「Are you ...?」のように be動詞で聞かれた質問には、be動詞で答えるよ。I のときは Yes, I am. だよ。Yes, I do. や Yes, I have. は、別の聞き方の返事だよ。",
+    exampleSentence: "Yes, I am.",
+    translation: "はい、そうです。（つかれています）",
+  },
 ];
 
 export const lesson01TeachPrompt =

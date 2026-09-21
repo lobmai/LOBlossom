@@ -15,6 +15,8 @@ interface StepNavigationProps {
   nextLoading?: boolean;
   /** 指定時は Link の代わりにボタンでクリックを処理（入力チェックなど） */
   onNextClick?: () => void;
+  /** Link 遷移時のみ。preventDefault しない計測用フック */
+  onNextLinkClick?: () => void;
 }
 
 export function StepNavigation({
@@ -25,6 +27,7 @@ export function StepNavigation({
   nextDisabled = false,
   nextLoading = false,
   onNextClick,
+  onNextLinkClick,
 }: StepNavigationProps) {
   const router = useRouter();
 
@@ -66,7 +69,12 @@ export function StepNavigation({
             {nextLoading ? ui.nav.processing : nextLabel}
           </button>
         ) : (
-          <Link href={nextHref} prefetch className={nextButtonClass}>
+          <Link
+            href={nextHref}
+            prefetch
+            className={nextButtonClass}
+            onClick={() => onNextLinkClick?.()}
+          >
             {nextLabel}
           </Link>
         ))}

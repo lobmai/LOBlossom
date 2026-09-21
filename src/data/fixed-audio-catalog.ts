@@ -2,9 +2,21 @@ import { lesson01CheckQuestions } from "@/data/lesson01";
 
 import { lesson02CheckQuestions } from "@/data/lesson02";
 
+import { lesson03CheckQuestions } from "@/data/lesson03";
+
+import { lesson04CheckQuestions } from "@/data/lesson04";
+
+import { lesson05CheckQuestions } from "@/data/lesson05";
+
 import { lesson01SummaryConfig } from "@/lib/lessons/lesson01-summary";
 
 import { lesson02SummaryConfig } from "@/lib/lessons/lesson02-summary";
+
+import { lesson03SummaryConfig } from "@/lib/lessons/lesson03-summary";
+
+import { lesson04SummaryConfig } from "@/lib/lessons/lesson04-summary";
+
+import { lesson05SummaryConfig } from "@/lib/lessons/lesson05-summary";
 
 import type { LessonAudioKey } from "@/lib/audio-constants";
 
@@ -266,6 +278,140 @@ const lesson2Step3Refs = lesson02SummaryConfig.meaningSentences.map((s) => ({
 
 
 
+const lesson3BodyRefs: { ref: string; text: string }[] = [
+
+  { ref: "lesson3.body.01", text: "I lost my key." },
+
+  { ref: "lesson3.body.02", text: "I have lost my key." },
+
+  { ref: "lesson3.body.03", text: "She has finished her homework." },
+
+  { ref: "lesson3.body.04", text: "I have finished my homework." },
+
+  { ref: "lesson3.body.05", text: "I have been to Kyoto." },
+
+  { ref: "lesson3.body.06", text: "I have lived here for three years." },
+
+  { ref: "lesson3.body.07", text: "I haven't finished my homework yet." },
+
+  { ref: "lesson3.body.08", text: "Have you been to Kyoto?" },
+
+];
+
+
+
+const lesson3CheckRefs = lesson03CheckQuestions.map((q) => ({
+
+  ref: `lesson3.check.${q.id}`,
+
+  text: q.exampleSentence,
+
+}));
+
+
+
+const lesson3Step3Refs = lesson03SummaryConfig.meaningSentences.map((s) => ({
+
+  ref: `lesson3.step3.${s.id}`,
+
+  text: s.sentence,
+
+}));
+
+
+
+const lesson4BodyRefs: { ref: string; text: string }[] = [
+
+  { ref: "lesson4.body.01", text: "I know the girl." },
+
+  { ref: "lesson4.body.02", text: "She speaks English." },
+
+  { ref: "lesson4.body.03", text: "I know the girl who speaks English." },
+
+  { ref: "lesson4.body.04", text: "This is the book." },
+
+  { ref: "lesson4.body.05", text: "I bought it yesterday." },
+
+  { ref: "lesson4.body.06", text: "This is the book that I bought yesterday." },
+
+  { ref: "lesson4.body.07", text: "This is the book which is interesting." },
+
+  { ref: "lesson4.body.08", text: "The girl who speaks English is my friend." },
+
+  { ref: "lesson4.body.09", text: "Do you know the woman who is talking to Ken?" },
+
+];
+
+
+
+const lesson4CheckRefs = lesson04CheckQuestions.map((q) => ({
+
+  ref: `lesson4.check.${q.id}`,
+
+  text: q.exampleSentence,
+
+}));
+
+
+
+const lesson4Step3Refs = lesson04SummaryConfig.meaningSentences.map((s) => ({
+
+  ref: `lesson4.step3.${s.id}`,
+
+  text: s.sentence,
+
+}));
+
+
+
+const lesson5BodyRefs: { ref: string; text: string }[] = [
+
+  { ref: "lesson5.body.01", text: "I am rich." },
+
+  { ref: "lesson5.body.02", text: "I am not rich." },
+
+  { ref: "lesson5.body.03", text: "If I were rich, I would travel around the world." },
+
+  { ref: "lesson5.body.04", text: "I don't have much time." },
+
+  { ref: "lesson5.body.05", text: "If I had more time, I would study English." },
+
+  { ref: "lesson5.body.06", text: "If I were you, I would talk to her." },
+
+  { ref: "lesson5.body.07", text: "If I had more money, I would buy a new computer." },
+
+  { ref: "lesson5.body.08", text: "If I knew the answer, I would tell you." },
+
+  { ref: "lesson5.body.09", text: "If I had a car, I would drive to the beach." },
+
+  { ref: "lesson5.body.10", text: "If it rains tomorrow, I will stay home." },
+
+  { ref: "lesson5.body.11", text: "If I had more time, I could study English." },
+
+];
+
+
+
+const lesson5CheckRefs = lesson05CheckQuestions.map((q) => ({
+
+  ref: `lesson5.check.${q.id}`,
+
+  text: q.exampleSentence,
+
+}));
+
+
+
+const lesson5Step3Refs = lesson05SummaryConfig.meaningSentences.map((s) => ({
+
+  ref: `lesson5.step3.${s.id}`,
+
+  text: s.sentence,
+
+}));
+
+
+
 const globalTextToFile = new Map<string, AudioFileEntry>();
 
 const allFiles: AudioFileEntry[] = [];
@@ -300,6 +446,48 @@ const lesson2RefMap = buildCatalog(
 
 
 
+const lesson3RefMap = buildCatalog(
+
+  "lesson3",
+
+  [...lesson3BodyRefs, ...lesson3CheckRefs, ...lesson3Step3Refs],
+
+  globalTextToFile,
+
+  allFiles,
+
+);
+
+
+
+const lesson4RefMap = buildCatalog(
+
+  "lesson4",
+
+  [...lesson4BodyRefs, ...lesson4CheckRefs, ...lesson4Step3Refs],
+
+  globalTextToFile,
+
+  allFiles,
+
+);
+
+
+
+const lesson5RefMap = buildCatalog(
+
+  "lesson5",
+
+  [...lesson5BodyRefs, ...lesson5CheckRefs, ...lesson5Step3Refs],
+
+  globalTextToFile,
+
+  allFiles,
+
+);
+
+
+
 export const FIXED_AUDIO_FILES: AudioFileEntry[] = allFiles;
 
 
@@ -309,6 +497,12 @@ export const FIXED_AUDIO_REFS: AudioRefMap = {
   ...lesson1RefMap,
 
   ...lesson2RefMap,
+
+  ...lesson3RefMap,
+
+  ...lesson4RefMap,
+
+  ...lesson5RefMap,
 
 };
 

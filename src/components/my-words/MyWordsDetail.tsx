@@ -21,13 +21,14 @@ import {
   getWordNavState,
   resolveWordNavOrder,
 } from "@/lib/my-words/nav-order";
+import { PageContentSkeleton } from "@/components/PageContentSkeleton";
 import { setUserStatusOverride } from "@/lib/my-words/status-override";
 import { getMyWordById, loadMyWords } from "@/lib/my-words/store";
 import { ui } from "@/lib/ui-text";
 import type { MyWordUserEntry } from "@/types/my-words";
 
 const navButtonClass =
-  "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-lg font-medium transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:active:scale-100";
+  "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border text-lg font-medium transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:active:scale-100";
 
 function readWord(wordId: string): MyWordUserEntry | null | undefined {
   if (typeof window === "undefined") return undefined;
@@ -95,7 +96,7 @@ export function MyWordsDetail({ wordId }: { wordId: string }) {
   }
 
   if (word === undefined) {
-    return null;
+    return <PageContentSkeleton rows={4} />;
   }
 
   if (word === null) {
@@ -116,6 +117,27 @@ export function MyWordsDetail({ wordId }: { wordId: string }) {
   const displayed = getDisplayedWordStatus(word);
   const manual = hasUserStatusOverride(word);
   const reviewDue = isWordReviewDue(word.nextReviewAt);
+  const statusChoices: {
+    status: UserStatusOverride;
+    label: string;
+    selectedClass: string;
+  }[] = [
+    {
+      status: "learned",
+      label: ui.myWords.setLearned,
+      selectedClass: "border-leaf-300 bg-leaf-50 text-leaf-800 ring-2 ring-leaf-200",
+    },
+    {
+      status: "practicing",
+      label: ui.myWords.setPracticing,
+      selectedClass: "border-amber-300 bg-amber-50 text-amber-800 ring-2 ring-amber-200",
+    },
+    {
+      status: "weak",
+      label: ui.myWords.setWeak,
+      selectedClass: "border-rose-300 bg-rose-50 text-rose-800 ring-2 ring-rose-200",
+    },
+  ];
 
   return (
     <div className="space-y-5">
@@ -131,10 +153,13 @@ export function MyWordsDetail({ wordId }: { wordId: string }) {
             ←
           </button>
           <div className="flex min-w-0 items-center justify-center gap-2">
-            <p className="truncate font-mono text-3xl font-bold text-gray-900">
+            <p className="min-w-0 truncate font-mono text-2xl font-bold text-gray-900 sm:text-3xl">
               {word.english}
             </p>
-            <SpeakButton audioRef={word.audioRef ?? `mywords.${word.wordId}`} />
+            <SpeakButton
+              audioRef={word.audioRef ?? `mywords.${word.wordId}`}
+              buttonClassName="h-11 w-11"
+            />
           </div>
           <button
             type="button"
@@ -153,41 +178,42 @@ export function MyWordsDetail({ wordId }: { wordId: string }) {
             className={`inline-block rounded-full border px-3 py-1 text-xs font-medium ${getWordStatusBadgeClass(displayed)}`}
           >
             {getWordStatusLabel(displayed)}
-          </span>
-          <p className="mt-2 text-xs text-gray-500">
-            {ui.myWords.currentStatus}：{getWordStatusLabel(displayed)}
             {manual ? `（${ui.myWords.statusManualHint}）` : ""}
-          </p>
+          </span>
         </div>
       </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white/70 p-5 shadow-sm">
-        <p className="text-sm text-gray-600">{ui.myWords.stillUnsure}</p>
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <button
-            type="button"
-            onClick={() => applyOverride("practicing")}
-            className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-2.5 text-sm text-amber-800 transition hover:bg-amber-50"
-          >
-            {ui.myWords.setPracticing}
-          </button>
-          <button
-            type="button"
-            onClick={() => applyOverride("weak")}
-            className="rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-2.5 text-sm text-rose-800 transition hover:bg-rose-50"
-          >
-            {ui.myWords.setWeak}
-          </button>
-          {manual && (
-            <button
-              type="button"
-              onClick={() => applyOverride(null)}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-600 transition hover:bg-gray-50"
-            >
-              {ui.myWords.clearOverride}
-            </button>
-          )}
+        <p className="text-sm text-gray-600">{ui.myWords.switchStatus}</p>
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {statusChoices.map((choice) => {
+            const selected = displayed === choice.status;
+            return (
+              <button
+                key={choice.status}
+                type="button"
+                onClick={() => applyOverride(choice.status)}
+                aria-pressed={selected}
+                className={`min-h-11 w-full rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
+                  selected
+                    ? choice.selectedClass
+                    : "border-gray-200 bg-white text-gray-600 hover:border-blossom-200 hover:bg-blossom-50"
+                }`}
+              >
+                {choice.label}
+              </button>
+            );
+          })}
         </div>
+        {manual && (
+          <button
+            type="button"
+            onClick={() => applyOverride(null)}
+            className="mt-3 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-600 transition hover:bg-gray-50"
+          >
+            {ui.myWords.clearOverride}
+          </button>
+        )}
       </div>
 
       <div className="rounded-2xl border border-blossom-100 bg-white/80 p-6 shadow-sm">
@@ -204,13 +230,6 @@ export function MyWordsDetail({ wordId }: { wordId: string }) {
             <dt className="font-medium text-gray-500">{ui.myWords.lessons}</dt>
             <dd className="mt-1 text-gray-900">
               {formatLessonNumbers(word.lessonNumbers)}
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-gray-500">{ui.myWords.status}</dt>
-            <dd className="mt-1 text-gray-900">
-              {getWordStatusLabel(displayed)}
-              {manual ? `（${ui.myWords.statusManualHint}）` : ""}
             </dd>
           </div>
           <div>

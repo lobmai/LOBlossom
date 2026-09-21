@@ -8,6 +8,11 @@ import {
   saveDraft,
   toLabeledAnswers,
 } from "@/lib/record-store";
+import {
+  logPerfElapsed,
+  perfLog,
+  startPerfTimer,
+} from "@/lib/perf-log";
 import type { LabeledAnswer, LessonRecord } from "@/types/record";
 
 interface UseLessonDraftOptions {
@@ -25,13 +30,17 @@ export function useLessonDraft({ lessonId, lessonTitle }: UseLessonDraftOptions)
   const [isReady, setIsReady] = useState(false);
 
   useLayoutEffect(() => {
+    perfLog("draft", "localStorage load start");
+    const startedAt = startPerfTimer();
     let existing = loadDraft(lessonId);
     if (!existing || existing.isCompleted) {
       existing = createDraft(lessonId, lessonTitle);
       saveDraft(existing);
     }
+    logPerfElapsed("draft", "localStorage load", startedAt);
     setDraft(existing);
     setIsReady(true);
+    perfLog("draft", "isReady=true");
   }, [lessonId, lessonTitle]);
 
   const persist = useCallback((record: LessonRecord) => {

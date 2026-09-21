@@ -7,6 +7,13 @@ import type {
   LessonRecord,
   SaveResult,
 } from "@/types/record";
+import type { UserExamplePersistedFields } from "@/lib/user-example-check";
+import {
+  buildExampleTranslationPatch,
+  normalizeExampleTranslation,
+  shouldTranslateFinalExample,
+} from "@/lib/translate-user-example";
+import { measureSync } from "@/lib/perf-log";
 
 const STORAGE_KEY_RECORDS = "loblossom:records";
 const STORAGE_KEY_DRAFT_PREFIX = "loblossom:draft:";
@@ -73,6 +80,11 @@ export function createDraft(lessonId: string, lessonTitle: string): LessonRecord
     coachSession: null,
     finalSummary: null,
     userExampleJapanese: null,
+    userExampleJapaneseFor: null,
+    userExampleFinal: null,
+    userExampleCorrectionReason: null,
+    userExampleIsCorrect: null,
+    myPointsFinal: null,
     feeling: null,
     feelingLabel: null,
     aiEvaluation: null,
@@ -82,11 +94,13 @@ export function createDraft(lessonId: string, lessonTitle: string): LessonRecord
 /** 進行中の下書きを読み込む（なければ null） */
 export function loadDraft(lessonId: string): LessonRecord | null {
   if (!isBrowser()) return null;
-  try {
-    return safeParseRecord(localStorage.getItem(draftKey(lessonId)));
-  } catch {
-    return null;
-  }
+  return measureSync("localStorage", `loadDraft(${lessonId})`, () => {
+    try {
+      return safeParseRecord(localStorage.getItem(draftKey(lessonId)));
+    } catch {
+      return null;
+    }
+  });
 }
 
 /** 下書きを保存する（入力の自動保存用） */
@@ -149,24 +163,28 @@ export function loadRecordByLessonId(lessonId: string): LessonRecord | null {
 /** My Loop：完了済みの記録一覧（新しい順） */
 export function loadAllRecords(): LessonRecord[] {
   if (!isBrowser()) return [];
-  try {
-    const records = safeParseRecords(localStorage.getItem(STORAGE_KEY_RECORDS));
-    return records
-      .filter((r) => r.isCompleted)
-      .sort((a, b) => {
-        const aTime = a.completedAt ?? a.startedAt;
-        const bTime = b.completedAt ?? b.startedAt;
-        return bTime.localeCompare(aTime);
-      });
-  } catch {
-    return [];
-  }
+  return measureSync("localStorage", "loadAllRecords", () => {
+    try {
+      const records = safeParseRecords(localStorage.getItem(STORAGE_KEY_RECORDS));
+      return records
+        .filter((r) => r.isCompleted)
+        .sort((a, b) => {
+          const aTime = a.completedAt ?? a.startedAt;
+          const bTime = b.completedAt ?? b.startedAt;
+          return bTime.localeCompare(aTime);
+        });
+    } catch {
+      return [];
+    }
+  });
 }
 
 /** My Loop：1件の記録を ID で取得 */
 export function loadRecordById(recordId: string): LessonRecord | null {
-  const record = loadAllRecords().find((r) => r.recordId === recordId);
-  return record ?? null;
+  return measureSync("localStorage", `loadRecordById(${recordId})`, () => {
+    const record = loadAllRecords().find((r) => r.recordId === recordId);
+    return record ?? null;
+  });
 }
 
 /**
@@ -175,12 +193,58 @@ export function loadRecordById(recordId: string): LessonRecord | null {
 export function saveDraftAiEvaluation(
   lessonId: string,
   aiEvaluation: AiEvaluation,
+  exampleFields?: UserExamplePersistedFields | null,
 ): SaveResult {
   const draft = loadDraft(lessonId);
   if (!draft) {
     return { ok: false, error: "draft not found" };
   }
-  return saveDraft({ ...draft, aiEvaluation });
+  const translationPatch = exampleFields
+    ? buildExampleTranslationPatch(
+        exampleFields.userExampleFinal,
+        exampleFields.userExampleJapanese,
+      )
+    : {};
+  return saveDraft({
+    ...draft,
+    aiEvaluation,
+    ...(exampleFields
+      ? {
+          userExampleFinal: exampleFields.userExampleFinal,
+          userExampleCorrectionReason: exampleFields.userExampleCorrectionReason,
+          userExampleIsCorrect: exampleFields.userExampleIsCorrect,
+          ...translationPatch,
+        }
+      : {}),
+  });
+}
+
+/** Step4：最終例文の日本語訳を保存。空では既存訳を消さない */
+export function saveDraftUserExampleJapanese(
+  lessonId: string,
+  translation: string | null | undefined,
+  finalEnglish?: string | null,
+): SaveResult {
+  const draft = loadDraft(lessonId);
+  if (!draft) {
+    return { ok: false, error: "draft not found" };
+  }
+  const finalText =
+    (finalEnglish ?? draft.userExampleFinal)?.trim() || "";
+  const patch = buildExampleTranslationPatch(finalText, translation);
+  if (!patch.userExampleJapanese) {
+    return { ok: true };
+  }
+  if (
+    !shouldTranslateFinalExample(
+      finalText,
+      draft.userExampleJapanese,
+      draft.userExampleJapaneseFor,
+    )
+  ) {
+    return { ok: true };
+  }
+  return saveDraft({ ...draft, ...patch });
 }
 
 /** 下書きに AI コーチの質問を保存する（Step 5 で使用）。 */
@@ -234,15 +298,18 @@ export function saveDraftFinalizeResult(
   lessonId: string,
   finalSummary: LabeledAnswer[],
   userExampleJapanese?: string | null,
+  myPointsFinal?: string | null,
 ): SaveResult {
   const draft = loadDraft(lessonId);
   if (!draft) {
     return { ok: false, error: "draft not found" };
   }
+  const nextJapanese = normalizeExampleTranslation(userExampleJapanese);
   return saveDraft({
     ...draft,
     finalSummary,
-    ...(userExampleJapanese !== undefined ? { userExampleJapanese } : {}),
+    ...(nextJapanese ? { userExampleJapanese: nextJapanese } : {}),
+    ...(myPointsFinal !== undefined ? { myPointsFinal } : {}),
   });
 }
 
@@ -276,6 +343,11 @@ export function resetDraftAfterSummarize(
     coachSession: null,
     finalSummary: null,
     userExampleJapanese: null,
+    userExampleJapaneseFor: null,
+    userExampleFinal: null,
+    userExampleCorrectionReason: null,
+    userExampleIsCorrect: null,
+    myPointsFinal: null,
   });
 }
 

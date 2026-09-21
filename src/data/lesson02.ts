@@ -98,6 +98,17 @@ export const lesson02CheckQuestions: CheckQuestion[] = [
     exampleSentence: "Do you like music?",
     translation: "あなたは音楽が好きですか？",
   },
+  {
+    id: "q7",
+    type: "choice",
+    question: "Do you like music? 自然な返事はどれ？",
+    options: ["Yes, I am.", "Yes, I do.", "Yes, I have.", "Yes, I did."],
+    answer: "Yes, I do.",
+    explanation:
+      "「Do you ...?」で聞かれた質問には do を使って答えるよ。Yes, I am. は be動詞の返事、Yes, I have. は現在完了の返事だよ。",
+    exampleSentence: "Yes, I do.",
+    translation: "はい、好きです。",
+  },
 ];
 
 export const lesson02TeachPrompt =

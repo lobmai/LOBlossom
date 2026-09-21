@@ -1,12 +1,18 @@
 import type { WordMasterEntry } from "@/types/my-words";
 import { lesson01WordMaster } from "@/data/my-words/lesson01-words";
 import { lesson02WordMaster } from "@/data/my-words/lesson02-words";
+import { lesson03WordMaster } from "@/data/my-words/lesson03-words";
+import { lesson04WordMaster } from "@/data/my-words/lesson04-words";
+import { lesson05WordMaster } from "@/data/my-words/lesson05-words";
 import { lesson01SupplementalWords } from "@/data/my-words/lesson01-supplemental";
 
 /** Lesson 番号 → 単語マスター */
 const WORD_MASTER_BY_LESSON: Record<number, WordMasterEntry[]> = {
   1: lesson01WordMaster,
   2: lesson02WordMaster,
+  3: lesson03WordMaster,
+  4: lesson04WordMaster,
+  5: lesson05WordMaster,
 };
 
 /** 指定 Lesson の重要単語マスターを返す */

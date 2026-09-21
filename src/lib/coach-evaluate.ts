@@ -11,10 +11,22 @@ import {
 } from "@/lib/lessons/types";
 import {
   getFinalSummarySections,
-  hasUserExample,
+  getUnclearQuestionText,
 } from "@/lib/summary-fields";
+import {
+  buildExplainToUnderstandPolicy,
+  buildGrade5LearnerLanguagePolicy,
+  buildUnknownQuestionAnswerLengthPolicy,
+} from "@/lib/coach-explain-policy";
+import { clipUnknownQuestionAnswer } from "@/lib/clip-unknown-question-answer";
 import { sanitizeCoachMessage } from "@/lib/sanitize-coach-message";
 import { COACH_MODEL } from "@/lib/coach-model";
+import { logPerfElapsed, perfLog, startPerfTimer } from "@/lib/perf-log";
+import { getValidUserExample } from "@/lib/answer-quality";
+import {
+  applyUserExampleCheck,
+  buildUserExampleCheckInstructions,
+} from "@/lib/user-example-check";
 import { getOpenAiApiKey } from "@/lib/openai-config";
 import {
   buildRubricPromptSection,
@@ -54,9 +66,7 @@ export const CoachEvaluationSchema = z.object({
   nextQuestion: z
     .string()
     .nullable()
-    .describe(
-      "追加で確認したい質問。すぐ答えを教えない。不要なら null",
-    ),
+    .describe("使わない。必ず null"),
   overallLevel: z
     .enum(["understood", "partial", "misconception", "insufficient"])
     .describe(
@@ -64,7 +74,38 @@ export const CoachEvaluationSchema = z.object({
     ),
   polishedEntries: z.array(PolishedEntrySchema),
   hasPolish: z.boolean(),
-  unclearAdvice: z.string().nullable(),
+  unclearAdvice: z
+    .string()
+    .nullable()
+    .describe("使わない。必ず null。疑問への回答は unknownQuestionAnswer に書く"),
+  unknownQuestionAnswer: z
+    .string()
+    .nullable()
+    .describe(
+      "ユーザーが書いた「分からなかったところ」への回答。基本1〜2文。最大3文。新しい情報がないなら次の文を書かない。同じ意味の言い換え禁止。励まし・締め禁止。疑問がなければ必ず null",
+    ),
+  userExampleCheck: z
+    .object({
+      isCorrect: z
+        .boolean()
+        .describe(
+          "英文として文法的に正しいなら true。好みや自然さだけで false にしない。レッスン文法を使っていないことだけで false にしない",
+        ),
+      correctedExample: z
+        .string()
+        .nullable()
+        .describe(
+          "isCorrect が false のときだけ、誤りを最小限直した正しい英文。true のときは必ず null",
+        ),
+      errorReason: z
+        .string()
+        .nullable()
+        .describe(
+          "isCorrect が false のときだけ、やさしい日本語で簡潔な理由。true のときは必ず null",
+        ),
+    })
+    .nullable()
+    .describe("自作例文の文法チェック。例文がなければ null"),
 });
 
 export type CoachEvaluationResult = z.infer<typeof CoachEvaluationSchema>;
@@ -155,11 +196,53 @@ function getPolishFieldIds(
   return ids;
 }
 
+function buildUnknownQuestionInstructions(question: string | null): string {
+  if (!question) {
+    return [
+      "【分からなかったところへの回答】",
+      "- ユーザーは疑問を書いていない。unknownQuestionAnswer は必ず null",
+      "- unclearAdvice も必ず null",
+      "- 疑問への説明を作らない",
+    ].join("\n");
+  }
+  return [
+    "【分からなかったところへの回答】",
+    "- ユーザーが次の疑問を書いた。unknownQuestionAnswer に、その疑問だけに直接答える",
+    `- 疑問：${question}`,
+    "- 評価（strengths / gaps / overallMessage）と混ぜない。答えは unknownQuestionAnswer だけに書く",
+    "- overallMessage で「理解が不足しています」だけで終わらせない",
+    "- 専門用語はなるべく避ける。使う場合は短い説明を添える",
+    "- unclearAdvice は必ず null",
+    "",
+    buildExplainToUnderstandPolicy(),
+    "",
+    buildUnknownQuestionAnswerLengthPolicy(),
+  ].join("\n");
+}
+
 function buildEvaluateInstructions(
   basePrompt: string,
   hasRubric: boolean,
+  lessonId: string,
+  originalExample: string | null,
+  unclearQuestion: string | null,
 ): string {
-  if (!hasRubric) return basePrompt;
+  const exampleCheck = buildUserExampleCheckInstructions(
+    lessonId,
+    originalExample,
+  );
+  const unknownQuestion = buildUnknownQuestionInstructions(unclearQuestion);
+  if (!hasRubric) {
+    return [
+      basePrompt,
+      "",
+      buildGrade5LearnerLanguagePolicy(),
+      "",
+      unknownQuestion,
+      "",
+      exampleCheck,
+    ].join("\n");
+  }
   return [
     basePrompt,
     "",
@@ -169,10 +252,16 @@ function buildEvaluateInstructions(
     "- strengths: 理解できている点（必ず1件以上）",
     "- gaps: 不足があるときだけ。なければ []",
     "- misconceptions: 誤解があるときだけ。なければ []",
-    "- nextQuestion: 追加確認が必要なときだけ。不要なら null",
+    "- nextQuestion: 必ず null。追加の質問は作らない",
     "- overallLevel が understood のとき gaps=[] misconceptions=[] nextQuestion=null",
     "- 意味不明・1文字・質問と無関係な入力は overallLevel=insufficient、strengths=[]",
     "- overallMessage は strengths を要約したやさしい総評にもする",
+    "",
+    buildGrade5LearnerLanguagePolicy(),
+    "",
+    unknownQuestion,
+    "",
+    exampleCheck,
   ].join("\n");
 }
 
@@ -216,6 +305,8 @@ export async function evaluateSummary(
 
   const config = lesson.summary;
   const rubric = lesson.coach.rubric;
+  const originalExample = getValidUserExample(entryMap(summaryEntries));
+  const unclearQuestion = getUnclearQuestionText(summaryEntries);
   const client = new OpenAI({ apiKey });
 
   const response = await client.responses.parse({
@@ -223,6 +314,9 @@ export async function evaluateSummary(
     instructions: buildEvaluateInstructions(
       lesson.coach.evaluateSystemPrompt,
       Boolean(rubric),
+      lessonId,
+      originalExample,
+      unclearQuestion,
     ),
     input: buildEvaluateInput(lessonTitle, config, summaryEntries, rubric),
     text: {
@@ -235,10 +329,12 @@ export async function evaluateSummary(
     throw new Error("Failed to parse AI evaluation");
   }
 
-  let overallMessage = sanitizeCoachMessage(parsed.overallMessage);
-  if (parsed.unclearAdvice?.trim()) {
-    overallMessage = `${overallMessage}\n${sanitizeCoachMessage(parsed.unclearAdvice)}`;
-  }
+  const overallMessage = sanitizeCoachMessage(parsed.overallMessage);
+  const unknownQuestionAnswer = unclearQuestion
+    ? clipUnknownQuestionAnswer(
+        sanitizeCoachMessage(parsed.unknownQuestionAnswer?.trim() ?? ""),
+      )
+    : null;
 
   const polishIds = new Set(getPolishFieldIds(config, summaryEntries));
 
@@ -250,19 +346,28 @@ export async function evaluateSummary(
     overallLevel: parsed.overallLevel,
   });
 
-  return {
+  const exampleApplied = applyUserExampleCheck(
+    originalExample,
+    parsed.userExampleCheck,
+  );
+
+  const evaluation: AiEvaluation = {
     overallMessage,
     corrections: [],
     polishedEntries: parsed.polishedEntries.filter((p) => polishIds.has(p.id)),
     hasPolish: parsed.hasPolish,
-    unclearAdvice: parsed.unclearAdvice,
+    unclearAdvice: null,
+    unknownQuestionAnswer,
     evaluatedAt: new Date().toISOString(),
     strengths: structured.strengths,
     gaps: structured.gaps,
     misconceptions: structured.misconceptions,
-    nextQuestion: structured.nextQuestion,
+    nextQuestion: null,
     overallLevel: structured.overallLevel,
+    userExampleCheck: exampleApplied.display,
   };
+
+  return evaluation;
 }
 
 const FinalizeSchema = z.object({
@@ -272,15 +377,10 @@ const FinalizeSchema = z.object({
       polishedAnswer: z.string(),
     }),
   ),
-  userExampleJapanese: z
-    .string()
-    .nullable()
-    .describe("ユーザーの自作例文の自然な日本語訳。例文がなければnull"),
 });
 
 export type FinalizeResult = {
   finalSummary: LabeledAnswer[];
-  userExampleJapanese: string | null;
 };
 
 export async function finalizeSummary(
@@ -288,6 +388,7 @@ export async function finalizeSummary(
   summaryEntries: LabeledAnswer[],
   aiEvaluation: AiEvaluation,
   coachAnswer: string | null,
+  _exampleForTranslation?: string | null,
 ): Promise<FinalizeResult> {
   const lesson = getLessonById(lessonId);
   if (!lesson) {
@@ -299,13 +400,9 @@ export async function finalizeSummary(
     throw new Error("OPENAI_API_KEY is not configured");
   }
 
-  const map = entryMap(summaryEntries);
   const sectionDefs = getFinalSummarySections(lessonId);
   const fieldIds = sectionDefs.map((s) => s.id);
   const config = lesson.summary;
-
-  const hasExamples =
-    hasUserExample(map) || map[USER_EXAMPLE_ID]?.trim();
 
   const promptParts = [
     buildSummaryPrompt(lesson.meta.title, config, summaryEntries),
@@ -325,13 +422,10 @@ export async function finalizeSummary(
   promptParts.push("- id: final-my-summary の1項目だけ");
   promptParts.push("- 復習ノートとして後から見返せる要点だけ。評価コメントは書かない");
   promptParts.push("- ユーザーの自作例文はまとめ本文に入れない");
-  if (hasExamples) {
-    promptParts.push("- userExampleJapanese に自作例文の自然な日本語訳を返す");
-  } else {
-    promptParts.push("- userExampleJapanese は null");
-  }
 
   const client = new OpenAI({ apiKey });
+  const openaiStartedAt = startPerfTimer();
+  perfLog("finalize", "openai start");
   const response = await client.responses.parse({
     model: COACH_MODEL,
     instructions: lesson.coach.finalizeInstructions,
@@ -340,6 +434,7 @@ export async function finalizeSummary(
       format: zodTextFormat(FinalizeSchema, "final_summary"),
     },
   });
+  logPerfElapsed("finalize", "openai", openaiStartedAt);
 
   const parsed = response.output_parsed;
   if (!parsed) {
@@ -357,8 +452,5 @@ export async function finalizeSummary(
         label: labelFor(e.id),
         answer: sanitizeCoachMessage(e.polishedAnswer),
       })),
-    userExampleJapanese: parsed.userExampleJapanese?.trim()
-      ? sanitizeCoachMessage(parsed.userExampleJapanese)
-      : null,
   };
 }

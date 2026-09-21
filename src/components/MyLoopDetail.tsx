@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { SpeechNavigationGuard } from "@/components/SpeechNavigationGuard";
 import {
   formatStudyDate,
@@ -13,27 +13,66 @@ import {
   getLessonNumber,
   getRecordDisplayExample,
 } from "@/lib/my-loop-display";
+import { PageContentSkeleton } from "@/components/PageContentSkeleton";
 import {
   peekCachedMyLoopRecord,
 } from "@/lib/my-loop-cache";
 import { loadRecordById } from "@/lib/record-store";
+import {
+  logPerfElapsed,
+  measureFromNavStart,
+  perfLog,
+  startPerfTimer,
+} from "@/lib/perf-log";
 import { ui } from "@/lib/ui-text";
 import type { LessonRecord } from "@/types/record";
 
 function readRecord(recordId: string): LessonRecord | null | undefined {
   if (typeof window === "undefined") return undefined;
-  return peekCachedMyLoopRecord(recordId) ?? loadRecordById(recordId);
+  const cacheStartedAt = startPerfTimer();
+  perfLog("my-loop-detail", "cache check start");
+  const cached = peekCachedMyLoopRecord(recordId);
+  logPerfElapsed(
+    "my-loop-detail",
+    `cache check ${cached ? "HIT" : "MISS"}`,
+    cacheStartedAt,
+  );
+  if (cached) return cached;
+  return loadRecordById(recordId);
 }
 
 export function MyLoopDetail({ recordId }: { recordId: string }) {
   const [record, setRecord] = useState<LessonRecord | null | undefined>(undefined);
+  const mountLoggedRef = useRef(false);
+  const mountAtRef = useRef(0);
+  const displayLoggedRef = useRef(false);
+
+  if (!mountLoggedRef.current) {
+    mountLoggedRef.current = true;
+    mountAtRef.current = startPerfTimer();
+    perfLog("my-loop-detail", "MyLoopDetail mount");
+    measureFromNavStart("my-loop-to-detail", "click → mount");
+  }
 
   useLayoutEffect(() => {
-    setRecord(readRecord(recordId) ?? null);
+    perfLog("my-loop-detail", "record load start");
+    const loadStartedAt = startPerfTimer();
+    const next = readRecord(recordId) ?? null;
+    logPerfElapsed("my-loop-detail", "record load", loadStartedAt);
+    setRecord(next);
+    perfLog("my-loop-detail", "record state set");
   }, [recordId]);
 
+  if (record !== undefined && !displayLoggedRef.current) {
+    displayLoggedRef.current = true;
+    perfLog("my-loop-detail", record ? "detail UI shown" : "not-found UI shown");
+    perfLog("my-loop-detail", "skeleton end");
+    logPerfElapsed("my-loop-detail", "mount → record display", mountAtRef.current);
+    measureFromNavStart("my-loop-to-detail", "click → final display");
+  }
+
   if (record === undefined) {
-    return null;
+    return <PageContentSkeleton rows={4} />;
   }
 
   if (record === null) {
@@ -107,6 +146,7 @@ export function MyLoopDetail({ recordId }: { recordId: string }) {
 
       <Link
         href={getLessonReviewPath(record)}
+        prefetch
         className="inline-flex w-full items-center justify-center rounded-xl border border-blossom-200 bg-white px-6 py-3 text-sm font-medium text-blossom-600 transition hover:bg-blossom-50"
       >
         {ui.myLoop.reviewLesson}

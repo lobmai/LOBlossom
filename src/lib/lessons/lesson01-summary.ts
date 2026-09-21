@@ -15,6 +15,7 @@ export { BE_VERB_MEANING_ID, NEGATION_RULE_ID, QUESTION_HOW_ID };
 
 export const lesson01SummaryConfig: LessonSummaryConfig = {
   includePointsInTrajectory: false,
+  myPointsSource: "step5-answers",
   meaningSentences: [],
   meaningFields: [
     {

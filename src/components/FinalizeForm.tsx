@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
@@ -16,8 +16,26 @@ import { buildLesson01FinalSummary, replaceLesson01MyPoints } from "@/lib/build-
 
 import { buildFinalSummary } from "@/lib/build-final-summary";
 
-import { fetchWithTimeout, logDevTiming } from "@/lib/fetch-with-timeout";
-import { getMyPointsSourceAnswers } from "@/lib/polish-my-points";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import {
+  logPerfElapsed,
+  measureFromNavStart,
+  perfLog,
+  startPerfTimer,
+} from "@/lib/perf-log";
+import { isMeaningfulText } from "@/lib/answer-quality";
+import {
+  collectMyPointsPolishSource,
+  fallbackMyPointsFromAnswers,
+  resolveMyPointsSourceKind,
+  toStoredMyPointsFinal,
+} from "@/lib/polish-my-points";
+import { FinalizePreviewEditCard } from "@/components/FinalizePreviewEditCard";
+import { getMyLoopSavedFields } from "@/lib/my-loop-display";
+import {
+  canEditFinalizePreview,
+  resolveEditedPreviewValue,
+} from "@/lib/finalize-preview-edit";
 import { FINAL_L1_MY_POINTS_ID } from "@/lib/lessons/lesson01-final-summary";
 
 import { getLesson, getLessonStepPath } from "@/lib/lessons/registry";
@@ -36,6 +54,8 @@ import {
 
   loadDraft,
 
+  saveDraft,
+
   saveDraftFinalizeResult,
 
 } from "@/lib/record-store";
@@ -47,7 +67,7 @@ import {
 
 import { ui } from "@/lib/ui-text";
 
-import type { LabeledAnswer } from "@/types/record";
+import type { LabeledAnswer, LessonRecord } from "@/types/record";
 
 
 
@@ -55,26 +75,29 @@ const inputClassName =
 
   "w-full resize-y rounded-xl border border-gray-200 p-3 text-base leading-relaxed text-gray-800 focus:border-blossom-300 focus:outline-none focus:ring-2 focus:ring-blossom-100 sm:text-sm";
 
-async function polishLesson01MyPoints(
-  entries: LabeledAnswer[],
-  userAnswers: string[],
-): Promise<LabeledAnswer[]> {
-  if (userAnswers.length === 0) return entries;
-  const startedAt = performance.now();
+let finalizeLoadSeq = 0;
+
+async function requestPolishedMyPoints(userAnswers: string[]): Promise<string | null> {
+  const answers = userAnswers.map((a) => a.trim()).filter(Boolean);
+  if (answers.length === 0) return null;
+  const startedAt = startPerfTimer();
+  perfLog("polish", "client fetch start");
   try {
     const response = await fetchWithTimeout("/api/coach/polish-points", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userAnswers }),
+      body: JSON.stringify({ userAnswers: answers }),
     });
-    logDevTiming("polish-points API", startedAt);
-    if (!response.ok) return entries;
+    logPerfElapsed("polish", "client fetch", startedAt);
+    if (!response.ok) return fallbackMyPointsFromAnswers(answers);
     const data = (await response.json()) as { polishedText?: string };
-    if (!data.polishedText?.trim()) return entries;
-    return replaceLesson01MyPoints(entries, data.polishedText);
+    return (
+      toStoredMyPointsFinal(data.polishedText) ??
+      fallbackMyPointsFromAnswers(answers)
+    );
   } catch {
-    logDevTiming("polish-points API (failed)", startedAt);
-    return entries;
+    logPerfElapsed("polish", "client fetch (failed)", startedAt);
+    return fallbackMyPointsFromAnswers(answers);
   }
 }
 
@@ -110,7 +133,35 @@ export function FinalizeForm({ lessonNumber }: { lessonNumber: number }) {
 
   const [navigating, setNavigating] = useState(false);
 
+  const draftRef = useRef<LessonRecord | null>(null);
 
+  const [loopPreview, setLoopPreview] = useState<ReturnType<
+    typeof getMyLoopSavedFields
+  > | null>(null);
+
+  const mountLoggedRef = useRef(false);
+  if (!mountLoggedRef.current) {
+    mountLoggedRef.current = true;
+    perfLog("FinalizeForm", "FinalizeForm mount");
+    perfLog("FinalizeForm", "loading UI shown (initial loading=true)");
+    measureFromNavStart("answer-to-finalize", "click → mount");
+    measureFromNavStart("answer-to-finalize", "click → loading UI");
+  }
+
+  function applyLoopPreview(
+    draft: LessonRecord,
+    summary: LabeledAnswer[],
+    myPointsFinal?: string | null,
+  ) {
+    const next: LessonRecord = {
+      ...draft,
+      finalSummary: summary,
+      myPointsFinal:
+        myPointsFinal !== undefined ? myPointsFinal : draft.myPointsFinal,
+    };
+    draftRef.current = next;
+    setLoopPreview(getMyLoopSavedFields(next));
+  }
 
   useEffect(() => {
 
@@ -119,6 +170,14 @@ export function FinalizeForm({ lessonNumber }: { lessonNumber: number }) {
 
 
     async function load() {
+
+      const runId = ++finalizeLoadSeq;
+
+      const loadStartedAt = startPerfTimer();
+
+      perfLog("FinalizeForm", `load start run=${runId}`);
+
+      try {
 
       const draft = loadDraft(lessonId);
 
@@ -158,33 +217,63 @@ export function FinalizeForm({ lessonNumber }: { lessonNumber: number }) {
 
         let list = draft!.finalSummary!;
 
-        if (lessonId === "lesson-01-be-verb") {
+        let polished = toStoredMyPointsFinal(draft!.myPointsFinal);
 
-          const currentPoints = list.find((e) => e.id === FINAL_L1_MY_POINTS_ID)?.answer.trim() ?? "";
+        if (!polished) {
 
-          const rawCoach = draft!.coachAnswer?.trim() ?? "";
+          const sourceKind = resolveMyPointsSourceKind(lesson.summary);
 
-          if (currentPoints && rawCoach && currentPoints === rawCoach) {
+          const answers = collectMyPointsPolishSource(
 
-            list = await polishLesson01MyPoints(
+            sourceKind,
 
-              list,
+            draft!.trajectoryEntries,
 
-              getMyPointsSourceAnswers(draft!.coachSession),
+            draft!.coachSession,
 
-            );
+          );
 
-            if (!cancelled) {
+          if (lessonId === "lesson-01-be-verb") {
 
-              saveDraftFinalizeResult(lessonId, list);
+            const currentPoints = list.find((e) => e.id === FINAL_L1_MY_POINTS_ID)?.answer.trim() ?? "";
+
+            const rawCoach = draft!.coachAnswer?.trim() ?? "";
+
+            if (currentPoints && rawCoach && currentPoints === rawCoach) {
+
+              const next = await requestPolishedMyPoints(answers);
+
+              if (next) {
+
+                list = replaceLesson01MyPoints(list, next);
+
+                polished = next;
+
+              }
+
+            } else if (currentPoints && isMeaningfulText(currentPoints)) {
+
+              polished = currentPoints;
 
             }
+
+          } else {
+
+            polished = await requestPolishedMyPoints(answers);
+
+          }
+
+          if (!cancelled) {
+
+            saveDraftFinalizeResult(lessonId, list, undefined, polished ?? undefined);
 
           }
 
         }
 
         if (!cancelled) {
+
+          applyLoopPreview(draft!, list, polished);
 
           setFinalList(list);
 
@@ -212,15 +301,33 @@ export function FinalizeForm({ lessonNumber }: { lessonNumber: number }) {
 
             draft!.coachAnswer,
 
+            draft!.userExampleFinal,
+
           );
 
-          const userAnswers = getMyPointsSourceAnswers(draft!.coachSession);
+          const userAnswers = collectMyPointsPolishSource(
 
-          built = await polishLesson01MyPoints(built, userAnswers);
+            resolveMyPointsSourceKind(lesson.summary),
+
+            draft!.trajectoryEntries,
+
+            draft!.coachSession,
+
+          );
+
+          const polished = await requestPolishedMyPoints(userAnswers);
+
+          if (polished) {
+
+            built = replaceLesson01MyPoints(built, polished);
+
+          }
 
           if (!cancelled) {
 
-            saveDraftFinalizeResult(lessonId, built);
+            saveDraftFinalizeResult(lessonId, built, undefined, polished ?? undefined);
+
+            applyLoopPreview(draft!, built, polished ?? draft!.myPointsFinal);
 
             setFinalList(built);
 
@@ -256,7 +363,9 @@ export function FinalizeForm({ lessonNumber }: { lessonNumber: number }) {
 
       if (draft!.aiEvaluation) {
 
-        const startedAt = performance.now();
+        const startedAt = startPerfTimer();
+
+        perfLog("finalize", `client fetch start run=${runId}`);
 
         try {
 
@@ -276,13 +385,15 @@ export function FinalizeForm({ lessonNumber }: { lessonNumber: number }) {
 
               coachAnswer: draft!.coachAnswer,
 
+              userExampleFinal: draft!.userExampleFinal ?? null,
+
             }),
 
           });
 
 
 
-          logDevTiming("finalize API", startedAt);
+          logPerfElapsed("finalize", `client fetch run=${runId}`, startedAt);
 
 
 
@@ -292,13 +403,81 @@ export function FinalizeForm({ lessonNumber }: { lessonNumber: number }) {
 
               finalSummary: LabeledAnswer[];
 
-              userExampleJapanese: string | null;
-
             };
 
             if (!cancelled && data.finalSummary?.length) {
 
-              saveDraftFinalizeResult(lessonId, data.finalSummary, data.userExampleJapanese);
+              const finalizeEndedAt = startPerfTimer();
+
+              const existingPoints = toStoredMyPointsFinal(draft!.myPointsFinal);
+
+              logPerfElapsed(
+
+                "FinalizeForm",
+
+                `finalize end → polish start run=${runId}`,
+
+                finalizeEndedAt,
+
+              );
+
+              if (existingPoints) {
+
+                perfLog("FinalizeForm", `polish skipped (myPointsFinal exists) run=${runId}`);
+
+              }
+
+              const polished =
+
+                existingPoints ??
+
+                (await requestPolishedMyPoints(
+
+                  collectMyPointsPolishSource(
+
+                    resolveMyPointsSourceKind(lesson.summary),
+
+                    draft!.trajectoryEntries,
+
+                    draft!.coachSession,
+
+                  ),
+
+                ));
+
+              const saveStartedAt = startPerfTimer();
+
+              saveDraftFinalizeResult(
+
+                lessonId,
+
+                data.finalSummary,
+
+                undefined,
+
+                polished ?? undefined,
+
+              );
+
+              logPerfElapsed(
+
+                "FinalizeForm",
+
+                `AI end → draft save run=${runId}`,
+
+                saveStartedAt,
+
+              );
+
+              applyLoopPreview(
+
+                draft!,
+
+                data.finalSummary,
+
+                polished ?? draft!.myPointsFinal,
+
+              );
 
               setFinalList(data.finalSummary);
 
@@ -316,7 +495,7 @@ export function FinalizeForm({ lessonNumber }: { lessonNumber: number }) {
 
         } catch {
 
-          logDevTiming("finalize API (failed)", startedAt);
+          logPerfElapsed("finalize", `client fetch (failed) run=${runId}`, startedAt);
 
         }
 
@@ -338,7 +517,51 @@ export function FinalizeForm({ lessonNumber }: { lessonNumber: number }) {
 
       if (!cancelled) {
 
-        saveDraftFinalizeResult(lessonId, fallback);
+        const polishGapStartedAt = startPerfTimer();
+
+        const existingPoints = toStoredMyPointsFinal(draft!.myPointsFinal);
+
+        logPerfElapsed(
+
+          "FinalizeForm",
+
+          `finalize end → polish start run=${runId}`,
+
+          polishGapStartedAt,
+
+        );
+
+        if (existingPoints) {
+
+          perfLog("FinalizeForm", `polish skipped (myPointsFinal exists) run=${runId}`);
+
+        }
+
+        const polished =
+
+          existingPoints ??
+
+          (await requestPolishedMyPoints(
+
+            collectMyPointsPolishSource(
+
+              resolveMyPointsSourceKind(lesson.summary),
+
+              draft!.trajectoryEntries,
+
+              draft!.coachSession,
+
+            ),
+
+          ));
+
+        const saveStartedAt = startPerfTimer();
+
+        saveDraftFinalizeResult(lessonId, fallback, undefined, polished ?? undefined);
+
+        logPerfElapsed("FinalizeForm", `AI end → draft save run=${runId}`, saveStartedAt);
+
+        applyLoopPreview(draft!, fallback, polished ?? draft!.myPointsFinal);
 
         setFinalList(fallback);
 
@@ -347,6 +570,12 @@ export function FinalizeForm({ lessonNumber }: { lessonNumber: number }) {
         setHydrated(true);
 
         setLoading(false);
+
+      }
+
+      } finally {
+
+        logPerfElapsed("FinalizeForm", `total run=${runId}`, loadStartedAt);
 
       }
 
@@ -362,7 +591,7 @@ export function FinalizeForm({ lessonNumber }: { lessonNumber: number }) {
 
     };
 
-  }, [lessonId]);
+  }, [lessonId, lesson.summary]);
 
 
 
@@ -392,12 +621,72 @@ export function FinalizeForm({ lessonNumber }: { lessonNumber: number }) {
 
     }));
 
-    const result = saveDraftFinalizeResult(lessonId, finalSummary);
+    const result = saveDraftFinalizeResult(
+
+      lessonId,
+
+      finalSummary,
+
+      undefined,
+
+      lessonId === "lesson-01-be-verb"
+
+        ? toStoredMyPointsFinal(nextEntries[FINAL_L1_MY_POINTS_ID]) ?? undefined
+
+        : undefined,
+
+    );
 
     setSaveError(!result.ok);
 
     setFinalList(finalSummary);
 
+    if (draftRef.current) {
+      applyLoopPreview(
+        draftRef.current,
+        finalSummary,
+        lessonId === "lesson-01-be-verb"
+          ? toStoredMyPointsFinal(nextEntries[FINAL_L1_MY_POINTS_ID])
+          : draftRef.current.myPointsFinal,
+      );
+    }
+
+  }
+
+  function persistPreviewEdit(
+    patch: Partial<
+      Pick<
+        LessonRecord,
+        "myPointsFinal" | "userExampleFinal" | "userExampleJapanese"
+      >
+    >,
+  ): boolean {
+    const draft = draftRef.current;
+    if (!draft) return false;
+    const next = { ...draft, ...patch };
+    const result = saveDraft(next);
+    setSaveError(!result.ok);
+    if (!result.ok) return false;
+    applyLoopPreview(next, next.finalSummary ?? finalList, next.myPointsFinal);
+    return true;
+  }
+
+  function savePreviewPoints(raw: string): boolean {
+    const next = resolveEditedPreviewValue("points", raw);
+    if (!next) return false;
+    return persistPreviewEdit({ myPointsFinal: next });
+  }
+
+  function savePreviewExample(raw: string): boolean {
+    const next = resolveEditedPreviewValue("example", raw);
+    if (!next) return false;
+    return persistPreviewEdit({ userExampleFinal: next });
+  }
+
+  function savePreviewJapanese(raw: string): boolean {
+    const next = resolveEditedPreviewValue("japanese", raw);
+    if (!next) return false;
+    return persistPreviewEdit({ userExampleJapanese: next });
   }
 
 
@@ -554,7 +843,48 @@ export function FinalizeForm({ lessonNumber }: { lessonNumber: number }) {
 
       </div>
 
-
+      {loopPreview && (
+        <div className="mt-8 space-y-4">
+          <div>
+            <p className="text-sm font-bold text-gray-900">
+              {ui.finalize.savedPreviewTitle}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              {ui.finalize.savedPreviewNote}
+            </p>
+          </div>
+          <section className="rounded-2xl border border-blossom-100 bg-white/80 p-5 shadow-sm">
+            <h3 className="text-sm font-bold text-gray-900">
+              ■ {ui.myLoop.lessonSummary}
+            </h3>
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
+              {loopPreview.summary || ui.myLoop.noSummary}
+            </p>
+          </section>
+          <FinalizePreviewEditCard
+            title={ui.myLoop.myPoints}
+            display={loopPreview.points}
+            emptyLabel={ui.myLoop.noPoints}
+            canEdit={canEditFinalizePreview(lessonId)}
+            onSave={savePreviewPoints}
+          />
+          <FinalizePreviewEditCard
+            title={ui.myLoop.myExample}
+            display={loopPreview.example}
+            emptyLabel={ui.myLoop.noExample}
+            canEdit={canEditFinalizePreview(lessonId)}
+            mono
+            onSave={savePreviewExample}
+          />
+          <FinalizePreviewEditCard
+            title={ui.finalize.exampleJapanese}
+            display={loopPreview.exampleJa}
+            emptyLabel={ui.myLoop.noExample}
+            canEdit={canEditFinalizePreview(lessonId)}
+            onSave={savePreviewJapanese}
+          />
+        </div>
+      )}
 
       {saveError && <SaveErrorBanner />}
 

@@ -8,6 +8,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { lesson01SpecialConfig } from "../src/data/special/lesson01-vocab";
+import { lesson02SpecialConfig } from "../src/data/special/lesson02-vocab";
+import { lesson03SpecialConfig } from "../src/data/special/lesson03-vocab";
+import { lesson04SpecialConfig } from "../src/data/special/lesson04-vocab";
+import { lesson05SpecialConfig } from "../src/data/special/lesson05-vocab";
 import { findWordMasterById } from "../src/data/my-words/index";
 import {
   applyReviewResult,
@@ -42,6 +46,7 @@ import {
 } from "../src/lib/my-words/store";
 import { isVocabAnswerCorrect } from "../src/lib/special-lessons/answer-check";
 import { buildSpecialQuestions } from "../src/lib/special-lessons/build-questions";
+import { getSpecialLesson, getSpecialLessonPath } from "../src/lib/special-lessons/registry";
 import { resolveAudioRef } from "../src/data/fixed-audio-catalog";
 import { resolveWordAudioRef } from "../src/lib/word-audio";
 import { shouldRetryCoachRequest } from "../src/lib/fetch-with-timeout";
@@ -123,6 +128,128 @@ ok("補助単語 friend のマスターあり", resolveWordMaster("friend")?.eng
 ok("補助単語 new のマスターあり", resolveWordMaster("new")?.english === "new");
 ok("補助単語 book のマスターあり", resolveWordMaster("book")?.english === "book");
 
+const l2Questions = buildSpecialQuestions(lesson02SpecialConfig);
+const l2WordIds = l2Questions.map((q) => q.wordId);
+ok("L2 Special は5問", l2Questions.length === 5);
+ok(
+  "L2 Special は Lesson2 単語だけ",
+  l2Questions.every((q) =>
+    ["play", "eat", "like", "go", "study"].includes(q.wordId),
+  ),
+);
+ok(
+  "L2 Special は5語各1回",
+  l2WordIds.join(",") === "play,eat,like,go,study" &&
+    new Set(l2WordIds).size === 5,
+);
+ok(
+  "L1 Special の単語は L2 に出ない",
+  !l2Questions.some((q) =>
+    ["student", "teacher", "tired", "happy", "friend", "new", "book"].includes(
+      q.wordId,
+    ),
+  ),
+);
+ok("L2 q1 は en-to-ja play", l2Questions[0]?.type === "en-to-ja" && l2Questions[0]?.wordId === "play");
+ok("L2 に en-to-ja がある", l2Questions.some((q) => q.type === "en-to-ja"));
+ok("L2 に ja-to-en がある", l2Questions.some((q) => q.type === "ja-to-en"));
+ok(
+  "L2 play 正解は する・遊ぶ",
+  Boolean(l2Questions[0] && isVocabAnswerCorrect("する・遊ぶ", l2Questions[0])),
+);
+ok(
+  "L2 like 日→英 正解",
+  Boolean(l2Questions[2] && isVocabAnswerCorrect("like", l2Questions[2])),
+);
+ok(
+  "L2 正解はマスターと一致",
+  l2Questions.every((q) => {
+    const master = resolveWordMaster(q.wordId);
+    if (!master) return false;
+    return q.type === "en-to-ja"
+      ? q.answer === master.japanese
+      : q.answer === master.english;
+  }),
+);
+ok("L2 Special が registry にある", getSpecialLesson(2)?.id === "lesson-02-special");
+ok("L1 Special は従来どおり", getSpecialLesson(1)?.id === "lesson-01-special");
+ok("L2 Special パス", getSpecialLessonPath(2) === "/lesson/2/special");
+ok(
+  "L2 Special ページがある",
+  existsSync(join(process.cwd(), "src/app/lesson/2/special/page.tsx")),
+);
+
+function assertLessonSpecial(
+  label: string,
+  config: typeof lesson03SpecialConfig,
+  lessonNumber: number,
+  wordIds: string[],
+) {
+  const questions = buildSpecialQuestions(config);
+  ok(`${label} Special は5問`, questions.length === 5);
+  ok(
+    `${label} Special は指定単語だけ`,
+    questions.every((q) => wordIds.includes(q.wordId)),
+  );
+  ok(
+    `${label} Special は5語各1回`,
+    questions.map((q) => q.wordId).join(",") === wordIds.join(",") &&
+      new Set(questions.map((q) => q.wordId)).size === 5,
+  );
+  ok(
+    `${label} に en-to-ja がある`,
+    questions.some((q) => q.type === "en-to-ja"),
+  );
+  ok(
+    `${label} に ja-to-en がある`,
+    questions.some((q) => q.type === "ja-to-en"),
+  );
+  ok(
+    `${label} 正解はマスターと一致`,
+    questions.every((q) => {
+      const master = resolveWordMaster(q.wordId);
+      if (!master) return false;
+      return q.type === "en-to-ja"
+        ? q.answer === master.japanese
+        : q.answer === master.english;
+    }),
+  );
+  ok(
+    `${label} Special が registry にある`,
+    getSpecialLesson(lessonNumber)?.id === `lesson-0${lessonNumber}-special`,
+  );
+  ok(
+    `${label} Special ページがある`,
+    existsSync(join(process.cwd(), `src/app/lesson/${lessonNumber}/special/page.tsx`)),
+  );
+}
+
+assertLessonSpecial("L3", lesson03SpecialConfig, 3, [
+  "key",
+  "homework",
+  "lost",
+  "finished",
+  "lived",
+]);
+assertLessonSpecial("L4", lesson04SpecialConfig, 4, [
+  "girl",
+  "book",
+  "interesting",
+  "yesterday",
+  "bought",
+]);
+assertLessonSpecial("L5", lesson05SpecialConfig, 5, [
+  "rich",
+  "travel",
+  "car",
+  "money",
+  "tomorrow",
+]);
+ok(
+  "L2 Special の問題内容は維持",
+  l2Questions.map((q) => q.wordId).join(",") === "play,eat,like,go,study",
+);
+
 // --- 正解：mastery / 連続 / nextReviewAt / status ---
 const student0 = freshEntry("student");
 ok("初期 status は new", student0.status === "new");
@@ -165,6 +292,16 @@ ok(
   getDisplayedWordStatus(learnedWithOverride) === "practicing",
 );
 ok("override 中も自動 status は learned", learnedWithOverride.status === "learned");
+const learnedManual = {
+  ...student0,
+  userStatusOverride: "learned" as const,
+};
+ok(
+  "習得済み override 表示は習得済み",
+  getDisplayedWordStatus(learnedManual) === "learned",
+);
+ok("習得済み override でも自動 status は new", learnedManual.status === "new");
+ok("習得済み override あり判定", hasUserStatusOverride(learnedManual));
 ok(
   "override 中も mastery 維持",
   learnedWithOverride.masteryLevel === studentCorrect3.masteryLevel,
@@ -388,6 +525,13 @@ ok(
     getMyWordById("teacher")?.correctCount === 0,
 );
 
+const addPlay = applyReviewResultToStore("play", "correct", 2, NOW);
+ok("L2 play の復習保存", addPlay.ok);
+const storedPlay = getMyWordById("play");
+ok("L2 play が My Words に入る", storedPlay?.english === "play");
+ok("L2 play の lessonNumbers に 2", storedPlay?.lessonNumbers.includes(2) === true);
+ok("L2 play の status は既存ロジック", storedPlay?.status === "practicing");
+
 // --- 配線が Special / 件数UI から外れていない ---
 const root = process.cwd();
 const quizSrc = readFileSync(
@@ -404,6 +548,27 @@ ok(
 );
 ok("Special に SpeakButton がある", quizSrc.includes("SpeakButton"));
 ok("Special 終了に My Words リンクがある", quizSrc.includes('href="/my-words"'));
+ok(
+  "単語音声が無くても即 return（クラッシュしない）",
+  quizSrc.includes("SpeakButton") &&
+    readFileSync(join(root, "src/components/SpeakButton.tsx"), "utf8").includes(
+      "wordAudioFileExists",
+    ),
+);
+
+const l1SpecialPageSrc = readFileSync(
+  join(root, "src/app/lesson/1/special/page.tsx"),
+  "utf8",
+);
+ok("L1 Special ページは getSpecialLesson(1)", l1SpecialPageSrc.includes("getSpecialLesson(1)"));
+ok("L1 Special は VocabSpecialQuiz", l1SpecialPageSrc.includes("VocabSpecialQuiz"));
+
+const l2SpecialPageSrc = readFileSync(
+  join(root, "src/app/lesson/2/special/page.tsx"),
+  "utf8",
+);
+ok("L2 Special ページは getSpecialLesson(2)", l2SpecialPageSrc.includes("getSpecialLesson(2)"));
+ok("L2 Special は VocabSpecialQuiz 再利用", l2SpecialPageSrc.includes("VocabSpecialQuiz"));
 
 const statsSrc = readFileSync(
   join(root, "src/components/my-words/MyWordsStats.tsx"),
@@ -436,8 +601,10 @@ ok("詳細が getMyWordById を使う", detailSrc.includes("getMyWordById"));
 ok("詳細が nextReviewAt を表示", detailSrc.includes("word.nextReviewAt"));
 ok("詳細に SpeakButton がある", detailSrc.includes("SpeakButton"));
 ok("詳細に前後ナビがある", detailSrc.includes("prevWord") && detailSrc.includes("nextWord"));
-ok("詳細に練習中にするがある", detailSrc.includes("setPracticing"));
-ok("詳細に苦手にするがある", detailSrc.includes("setWeak"));
+ok("詳細に習得済みがある", detailSrc.includes("setLearned"));
+ok("詳細に練習中がある", detailSrc.includes("setPracticing"));
+ok("詳細に苦手がある", detailSrc.includes("setWeak"));
+ok("詳細の見出しは切り替え", detailSrc.includes("switchStatus"));
 ok("詳細が override を保存する", detailSrc.includes("setUserStatusOverride"));
 ok("詳細がキーボード移動する", detailSrc.includes("ArrowLeft") && detailSrc.includes("ArrowRight"));
 ok("詳細が入力中はキー移動しない", detailSrc.includes("isTypingTarget"));

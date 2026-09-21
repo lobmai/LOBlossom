@@ -16,6 +16,7 @@ import {
 import {
   getValidUserExample,
   isMeaningfulText,
+  isValidUserExample,
 } from "@/lib/answer-quality";
 import { fromTrajectoryEntries } from "@/lib/summary-fields";
 
@@ -33,9 +34,14 @@ export {
 export function buildLesson01FinalSummary(
   trajectoryEntries: LabeledAnswer[],
   coachAnswer: string | null,
+  userExampleFinal?: string | null,
 ): LabeledAnswer[] {
   const map = fromTrajectoryEntries(trajectoryEntries);
-  const example = getValidUserExample(map);
+  const fromFinal = userExampleFinal?.trim() ?? "";
+  const example =
+    fromFinal && isValidUserExample(fromFinal)
+      ? fromFinal
+      : getValidUserExample(map);
   const points = coachAnswer?.trim() ?? "";
 
   if (!isMeaningfulText(points)) {

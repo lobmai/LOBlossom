@@ -5,9 +5,11 @@ import { useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatStudyDate, getLessonNumber, getRecordDisplayExample } from "@/lib/my-loop-display";
 import { rememberMyLoopRecords } from "@/lib/my-loop-cache";
+import { markNavStart } from "@/lib/perf-log";
 import { LESSON_SELECT_PATH } from "@/lib/lessons/registry";
 import { loadAllRecords } from "@/lib/record-store";
 import { ui } from "@/lib/ui-text";
+import { PageContentSkeleton } from "@/components/PageContentSkeleton";
 import type { LessonRecord } from "@/types/record";
 
 function readRecords(): LessonRecord[] | null {
@@ -19,7 +21,7 @@ function readRecords(): LessonRecord[] | null {
 
 export function MyLoopList() {
   const router = useRouter();
-  const [records, setRecords] = useState<LessonRecord[] | null>(null);
+  const [records, setRecords] = useState<LessonRecord[] | null>(readRecords);
 
   useLayoutEffect(() => {
     setRecords(readRecords() ?? []);
@@ -33,7 +35,7 @@ export function MyLoopList() {
   }, [records, router]);
 
   if (records === null) {
-    return null;
+    return <PageContentSkeleton rows={3} />;
   }
 
   if (records.length === 0) {
@@ -43,6 +45,7 @@ export function MyLoopList() {
         <p className="mt-4 text-sm text-gray-600">{ui.myLoop.empty}</p>
         <Link
           href={LESSON_SELECT_PATH}
+          prefetch
           className="mt-6 inline-flex items-center justify-center rounded-xl bg-blossom-500 px-6 py-3 text-sm font-medium text-white transition hover:bg-blossom-600"
         >
           {ui.myLoop.startLesson}
@@ -62,6 +65,7 @@ export function MyLoopList() {
             key={record.recordId}
             href={href}
             prefetch
+            onClick={() => markNavStart("my-loop-to-detail", record.recordId)}
             className="block rounded-2xl border border-blossom-100 bg-white/80 p-5 shadow-sm transition hover:border-blossom-200 hover:bg-blossom-50/30"
           >
             {lessonNumber && (

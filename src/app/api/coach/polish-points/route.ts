@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { polishMyPointsFromAnswers } from "@/lib/polish-my-points";
 import { isOpenAiApiKeyConfigured } from "@/lib/openai-config";
 import { getOpenAiErrorResponse, logOpenAiError } from "@/lib/openai-errors";
+import { logPerfElapsed, perfLog, startPerfTimer } from "@/lib/perf-log";
 
 interface PolishPointsBody {
   userAnswers: string[];
@@ -18,6 +19,8 @@ function isValidBody(body: unknown): body is PolishPointsBody {
 }
 
 export async function POST(request: Request) {
+  const routeStartedAt = startPerfTimer();
+  perfLog("polish", "server route start");
   try {
     if (!isOpenAiApiKeyConfigured()) {
       return NextResponse.json(
@@ -39,11 +42,14 @@ export async function POST(request: Request) {
 
     const polishedText = await polishMyPointsFromAnswers(body.userAnswers);
     if (!polishedText) {
+      logPerfElapsed("polish", "server route total (failed)", routeStartedAt);
       return NextResponse.json({ error: "polish_failed" }, { status: 500 });
     }
 
+    logPerfElapsed("polish", "server route total", routeStartedAt);
     return NextResponse.json({ polishedText });
   } catch (error) {
+    logPerfElapsed("polish", "server route total (failed)", routeStartedAt);
     logOpenAiError("coach/polish-points", error);
     const { status, code } = getOpenAiErrorResponse(error);
     return NextResponse.json({ error: code }, { status });

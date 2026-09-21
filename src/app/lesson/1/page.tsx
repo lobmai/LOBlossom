@@ -41,7 +41,11 @@ export default function Lesson1Page() {
             <li>
               ① <Highlight>～です / ～である</Highlight>
               <br />
-              <span className="text-xs text-gray-500">例：I am a student. ＝ 私は学生です。</span>
+              <span className="text-xs text-gray-500">
+                例：
+                <SpeakableEnglish audioRef="lesson1.body.01">I am a student.</SpeakableEnglish>
+                {" "}＝ 私は学生です。
+              </span>
             </li>
             <li>
               ② <Highlight>～にいる / ～にある</Highlight>

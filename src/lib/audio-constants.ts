@@ -7,7 +7,7 @@ export const OPENAI_TTS_VOICE = "nova" as const;
 /** 初心者向け：ややゆっくりすぎない速度 */
 export const OPENAI_TTS_SPEED = 1.0;
 
-export type LessonAudioKey = "lesson1" | "lesson2";
+export type LessonAudioKey = "lesson1" | "lesson2" | "lesson3" | "lesson4" | "lesson5";
 
 export function getAudioFilePath(lessonKey: LessonAudioKey, fileId: string): string {
   return `/audio/${lessonKey}/${fileId}.mp3`;

@@ -218,9 +218,7 @@ export function SaveForm({ lessonNumber }: { lessonNumber: number }) {
 
           <p className="text-lg font-bold text-gray-900">{ui.save.master.replace("1", String(lessonNumber))}</p>
 
-          <p className="mt-2 text-sm text-gray-600">{ui.save.message}</p>
-
-          <p className="mt-1 text-sm text-gray-600">{ui.save.message2}</p>
+          <p className="mt-2 whitespace-pre-line text-sm text-gray-600">{ui.save.message}</p>
 
 
 

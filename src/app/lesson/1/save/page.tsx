@@ -7,7 +7,7 @@ export default function Lesson1SavePage() {
     <LessonLayout
       lessonNumber={1}
       currentStep="save"
-      title={ui.save.title}
+      title={ui.save.master}
       subtitle={ui.save.subtitle}
     >
       <SaveForm lessonNumber={1} />

@@ -5,6 +5,7 @@ import { LESSON_SELECT_PATH } from "@/lib/lessons/registry";
 import { BlossomProgressBar } from "@/components/BlossomProgressBar";
 import { LessonAudioPreloader } from "@/components/LessonAudioPreloader";
 import { LessonMemoPanel } from "@/components/LessonMemoPanel";
+import { PrefetchOnMount } from "@/components/PrefetchOnMount";
 import { SpeechNavigationGuard } from "@/components/SpeechNavigationGuard";
 
 interface LessonLayoutProps {
@@ -29,8 +30,15 @@ export function LessonLayout({
   const steps = getLessonSteps(lessonNumber);
   const currentIndex = steps.findIndex((s) => s.id === currentStep);
 
+  const prevPath = currentIndex > 0 ? steps[currentIndex - 1]?.path : undefined;
+  const nextPath =
+    currentIndex >= 0 && currentIndex < steps.length - 1
+      ? steps[currentIndex + 1]?.path
+      : undefined;
+
   return (
     <div className="mx-auto min-h-screen max-w-2xl px-4 py-8">
+      <PrefetchOnMount hrefs={[LESSON_SELECT_PATH, prevPath, nextPath]} />
       <SpeechNavigationGuard />
       <LessonAudioPreloader lessonNumber={lessonNumber} />
       {showMemo && lessonId && <LessonMemoPanel lessonId={lessonId} />}
@@ -38,6 +46,7 @@ export function LessonLayout({
       <header className="mb-8">
         <Link
           href={LESSON_SELECT_PATH}
+          prefetch
           className="mb-4 inline-block text-sm text-gray-500 hover:text-blossom-500"
         >
           ← レッスン選択

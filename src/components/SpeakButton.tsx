@@ -11,15 +11,18 @@ import {
 } from "@/lib/audio-player";
 
 const iconClass =
-  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-blossom-200 bg-white text-sm text-blossom-600 shadow-sm transition hover:border-blossom-300 hover:bg-blossom-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex shrink-0 items-center justify-center rounded-full border border-blossom-200 bg-white text-sm text-blossom-600 shadow-sm transition hover:border-blossom-300 hover:bg-blossom-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40";
+const defaultButtonSize = "h-8 w-8";
 
 type SpeakButtonProps = {
   audioRef: string;
+  /** タップ領域を広げるときだけ指定（Lesson 例文ボタンは従来サイズのまま） */
+  buttonClassName?: string;
 };
 
 type AudioStatus = "ready" | "unavailable" | "error";
 
-export function SpeakButton({ audioRef }: SpeakButtonProps) {
+export function SpeakButton({ audioRef, buttonClassName }: SpeakButtonProps) {
   const isWordRef = audioRef.startsWith("mywords.");
   const resolved = isWordRef
     ? resolveWordAudioRef(audioRef)
@@ -88,7 +91,7 @@ export function SpeakButton({ audioRef }: SpeakButtonProps) {
         type="button"
         onClick={(event) => void handleClick(event)}
         onPointerDown={stopLinkNavigation}
-        className={`${iconClass}${isThisPlaying ? " border-blossom-400 bg-blossom-50" : ""}`}
+        className={`${iconClass} ${buttonClassName ?? defaultButtonSize}${isThisPlaying ? " border-blossom-400 bg-blossom-50" : ""}`}
         aria-label={`「${text}」を読み上げる`}
         title={title}
         disabled={busyRef.current}

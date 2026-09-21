@@ -23,6 +23,20 @@ export const WORD_AUDIO_FILES: Record<string, { url: string; text: string }> = {
   like: wordAudioEntry("like"),
   go: wordAudioEntry("go"),
   study: wordAudioEntry("study"),
+  key: wordAudioEntry("key"),
+  homework: wordAudioEntry("homework"),
+  lost: wordAudioEntry("lost"),
+  finished: wordAudioEntry("finished"),
+  lived: wordAudioEntry("lived"),
+  girl: wordAudioEntry("girl"),
+  interesting: wordAudioEntry("interesting"),
+  yesterday: wordAudioEntry("yesterday"),
+  bought: wordAudioEntry("bought"),
+  rich: wordAudioEntry("rich"),
+  travel: wordAudioEntry("travel"),
+  car: wordAudioEntry("car"),
+  money: wordAudioEntry("money"),
+  tomorrow: wordAudioEntry("tomorrow"),
 };
 
 function parseWordId(ref: string): string | null {

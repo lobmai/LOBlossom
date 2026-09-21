@@ -1,9 +1,17 @@
 import { lesson01SpecialConfig } from "@/data/special/lesson01-vocab";
+import { lesson02SpecialConfig } from "@/data/special/lesson02-vocab";
+import { lesson03SpecialConfig } from "@/data/special/lesson03-vocab";
+import { lesson04SpecialConfig } from "@/data/special/lesson04-vocab";
+import { lesson05SpecialConfig } from "@/data/special/lesson05-vocab";
 import type { SpecialLessonConfig } from "@/lib/special-lessons/types";
 
 /** 親レッスン番号 → Special 設定（Lesson2以降もここに追加） */
 export const SPECIAL_LESSON_BY_PARENT: Record<number, SpecialLessonConfig> = {
   1: lesson01SpecialConfig,
+  2: lesson02SpecialConfig,
+  3: lesson03SpecialConfig,
+  4: lesson04SpecialConfig,
+  5: lesson05SpecialConfig,
 };
 
 export function getSpecialLesson(parentLessonNumber: number): SpecialLessonConfig | undefined {

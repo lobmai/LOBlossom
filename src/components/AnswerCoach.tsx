@@ -13,7 +13,10 @@ import {
   synthesizeCoachPointsFromSession,
   updateSessionStatus,
 } from "@/lib/coach-session";
-import { getFixedCoachQuestion } from "@/lib/coach-teach-question";
+import {
+  getAnswerInputPlaceholder,
+  getFixedCoachQuestion,
+} from "@/lib/coach-teach-question";
 import {
   buildLocalHint,
   buildLocalTeachContent,
@@ -28,6 +31,7 @@ import {
   saveDraftCoachQuestion,
   saveDraftCoachSession,
 } from "@/lib/record-store";
+import { logPerfElapsed, markNavStart, measureFromNavStart, perfLog, startPerfTimer } from "@/lib/perf-log";
 import { ui } from "@/lib/ui-text";
 import { StepNavigation } from "@/components/StepNavigation";
 import { CoachThankYouBurst } from "@/components/CoachThankYouBurst";
@@ -59,7 +63,7 @@ function exchangeBubbleClass(exchange: CoachExchange): string {
   if (exchange.kind === "closing") {
     return "mr-8 rounded-2xl rounded-tl-sm border border-blossom-200 bg-blossom-50 px-4 py-3 text-sm text-gray-800";
   }
-  return "mr-8 rounded-2xl rounded-tl-sm bg-white px-4 py-3 text-sm text-gray-800 shadow-sm";
+  return "mr-8 rounded-2xl rounded-tl-sm border border-blossom-200 bg-white px-4 py-3 text-sm text-gray-800";
 }
 
 export function AnswerCoach({ lessonNumber }: { lessonNumber: number }) {
@@ -84,6 +88,18 @@ export function AnswerCoach({ lessonNumber }: { lessonNumber: number }) {
   const thankYouPlayedRef = useRef(false);
   const submitLockRef = useRef(false);
   const answerInputRef = useRef<HTMLTextAreaElement>(null);
+  const mountLoggedRef = useRef(false);
+  const firstUiLoggedRef = useRef(false);
+
+  if (!mountLoggedRef.current) {
+    mountLoggedRef.current = true;
+    perfLog("answer", "AnswerCoach mount");
+    perfLog(
+      "answer",
+      "PAGE_VS_AI: mount is page/route. First question is local (no AI). If this line is ~50s after click, suspect compile/chunk. If first question UI is fast but the 2nd question is slow, look at teach-evaluate.",
+    );
+    measureFromNavStart("evaluate-to-answer", "click → mount");
+  }
 
   function triggerCompleteCelebration() {
     if (thankYouPlayedRef.current) return;
@@ -132,14 +148,22 @@ export function AnswerCoach({ lessonNumber }: { lessonNumber: number }) {
   }, [hydrated, blocked, session]);
 
   useEffect(() => {
+    const draftLoadStarted = startPerfTimer();
     const draft = loadDraft(lessonId);
+    logPerfElapsed("answer", "localStorage loadDraft", draftLoadStarted);
     if (!draft?.aiEvaluation || isInsufficientEvaluation(draft.aiEvaluation)) {
       setBlocked(true);
       setHydrated(true);
+      if (!firstUiLoggedRef.current) {
+        firstUiLoggedRef.current = true;
+        perfLog("answer", "blocked UI (evaluate missing) — no AI on mount");
+        measureFromNavStart("evaluate-to-answer", "click → first UI");
+      }
       return;
     }
 
     const question = draft.coachQuestion ?? getFixedCoachQuestion(lessonId);
+    const questionSource = draft.coachQuestion ? "saved-draft" : "fixed-local";
     if (!draft.coachQuestion) {
       saveDraftCoachQuestion(lessonId, question);
     }
@@ -156,6 +180,15 @@ export function AnswerCoach({ lessonNumber }: { lessonNumber: number }) {
     setSession(initialSession);
     setBlocked(false);
     setHydrated(true);
+
+    if (!firstUiLoggedRef.current) {
+      firstUiLoggedRef.current = true;
+      perfLog(
+        "answer",
+        `first question UI ready source=${questionSource} (no AI on mount)`,
+      );
+      measureFromNavStart("evaluate-to-answer", "click → first question UI");
+    }
   }, [lessonId]);
 
   const persistSession = useCallback(
@@ -252,7 +285,8 @@ export function AnswerCoach({ lessonNumber }: { lessonNumber: number }) {
       });
 
       if (result.outcome === "complete") {
-        const closing = COACH_COMPLETE_CLOSING_MESSAGE;
+        const closing =
+          result.closingMessage?.trim() || COACH_COMPLETE_CLOSING_MESSAGE;
         next = appendExchange(next, {
           role: "coach",
           kind: "closing",
@@ -357,6 +391,11 @@ export function AnswerCoach({ lessonNumber }: { lessonNumber: number }) {
     setEvaluating(true);
     const isFollowUp = session.status === "awaiting-followup";
     unlockThankYouSound();
+    perfLog(
+      "answer",
+      "teach-evaluate AI start (after submit; not part of Step4→Step5 page nav)",
+    );
+    const aiStarted = startPerfTimer();
 
     try {
       const { status, data } = await postCoachApi(
@@ -386,12 +425,17 @@ export function AnswerCoach({ lessonNumber }: { lessonNumber: number }) {
       const next = applyTeachResult(working, result, text);
       persistSession(next);
       clearAnswerInput();
+      perfLog(
+        "answer",
+        `AI result shown outcome=${result.outcome} followUp=${Boolean(result.followUpQuestion)}`,
+      );
       if (next.status === "complete") {
         triggerCompleteCelebration();
       }
     } catch {
       setApiError(true);
     } finally {
+      logPerfElapsed("answer", "teach-evaluate client fetch", aiStarted);
       setEvaluating(false);
       submitLockRef.current = false;
     }
@@ -410,6 +454,9 @@ export function AnswerCoach({ lessonNumber }: { lessonNumber: number }) {
     }
     setNavigating(true);
     saveDraftCoachSession(lessonId, session, consolidated);
+    markNavStart("answer-to-finalize");
+    perfLog("answer", "router.push(finalize)");
+    measureFromNavStart("answer-to-finalize", "click → router.push");
     router.push(getLessonStepPath(lessonNumber, "finalize"));
   }
 
@@ -449,9 +496,17 @@ export function AnswerCoach({ lessonNumber }: { lessonNumber: number }) {
   return (
     <>
       <div className="space-y-4">
-        <div className="relative rounded-2xl border border-blossom-100 bg-blossom-50/40 p-5 shadow-sm">
-          <p className="mb-4 text-sm font-bold text-gray-900">
-            {ui.answer.conversationTitle}
+        <div className="relative rounded-2xl border border-blossom-200 bg-blossom-50/80 p-5 shadow-sm">
+          <p className="mb-4 flex items-center gap-2 text-base font-bold text-gray-900">
+            <span
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blossom-200 text-sm text-blossom-600"
+              aria-hidden
+            >
+              💬
+            </span>
+            <span>
+              {ui.answer.conversationTitle.replace(/^💬\s*/u, "")}
+            </span>
           </p>
           <div className="space-y-3">
             {session.exchanges.map((exchange, index) => (
@@ -478,11 +533,11 @@ export function AnswerCoach({ lessonNumber }: { lessonNumber: number }) {
 
         {!sessionDone && (
           <>
-            <div className="rounded-2xl border border-blossom-100 bg-white/80 p-5 shadow-sm">
-              <p className="mb-3 text-sm font-medium text-blossom-700">
+            <div className="rounded-2xl border border-gray-100 bg-gray-50/50 p-5">
+              <p className="mb-3 text-xs font-medium text-gray-500">
                 {teachQuestion.hintsLabel}
               </p>
-              <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
+              <ul className="list-inside list-disc space-y-1 text-sm text-gray-600">
                 {teachQuestion.hints.map((hint) => (
                   <li key={hint}>{hint}</li>
                 ))}
@@ -502,7 +557,7 @@ export function AnswerCoach({ lessonNumber }: { lessonNumber: number }) {
                 name="coach-answer"
                 defaultValue=""
                 onChange={handleAnswerInput}
-                placeholder={ui.answer.inputPlaceholder}
+                placeholder={getAnswerInputPlaceholder(lessonId)}
                 className={inputClassName}
                 disabled={evaluating}
                 autoComplete="off"

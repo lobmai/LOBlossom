@@ -17,7 +17,9 @@ import {
   saveDraft,
   saveDraftCheckQuizState,
 } from "@/lib/record-store";
+import { markNavStart } from "@/lib/perf-log";
 import { ui } from "@/lib/ui-text";
+import { shuffleChoicesStable } from "@/lib/check-choice-order";
 import type { CheckQuestion } from "@/types/lesson";
 import type { CheckQuizState } from "@/types/record";
 
@@ -192,6 +194,7 @@ export function CheckQuiz({ lessonNumber }: { lessonNumber: number }) {
 
               {question.type === "choice" && question.options && (
                 <ChoiceQuestion
+                  lessonId={lessonId}
                   question={question}
                   result={result}
                   onSelect={(option) => handleChoiceSelect(question, option)}
@@ -253,25 +256,38 @@ export function CheckQuiz({ lessonNumber }: { lessonNumber: number }) {
         nextHref={getLessonStepPath(lessonNumber, "summarize")}
         nextLabel={ui.check.toSummarize}
         nextDisabled={!allAnswered}
+        onNextLinkClick={() => markNavStart("check-to-summarize")}
       />
     </>
   );
 }
 
 function ChoiceQuestion({
+  lessonId,
   question,
   result,
   onSelect,
 }: {
+  lessonId: string;
   question: CheckQuestion;
   result?: QuestionResult;
   onSelect: (option: string) => void;
 }) {
   const isLocked = result?.answered ?? false;
+  const options = useMemo(
+    () =>
+      shuffleChoicesStable(
+        lessonId,
+        question.id,
+        question.options ?? [],
+        String(question.answer),
+      ),
+    [lessonId, question.id, question.options, question.answer],
+  );
 
   return (
     <ul className="space-y-2">
-      {question.options!.map((option) => {
+      {options.map((option) => {
         const isCorrectOption = option === question.answer;
         const isWrongPick =
           isLocked && !result!.correct && result!.userAnswer === option;

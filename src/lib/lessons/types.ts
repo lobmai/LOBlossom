@@ -28,6 +28,8 @@ export type TeachQuestionConfig = {
   question: string;
   hintsLabel: string;
   hints: string[];
+  /** Step5 入力欄。未指定なら ui.answer.inputPlaceholder（Lesson1） */
+  inputPlaceholder?: string;
 };
 
 export type LessonSummaryConfig = {
@@ -49,6 +51,12 @@ export type LessonSummaryConfig = {
   userExampleFields: UserExampleField[];
   /** Step5：固定の教える質問とレッスン別ヒント */
   teachQuestion: TeachQuestionConfig;
+  /**
+   * My Loop「大事だと思ったこと」の polish 原文。
+   * step3-points = Step3 の points、step5-answers = Step5 のユーザー発言。
+   * 未指定時は includePointsInTrajectory に従う。
+   */
+  myPointsSource?: "step3-points" | "step5-answers";
   finalSummarySections: { id: string; label: string }[];
 };
 

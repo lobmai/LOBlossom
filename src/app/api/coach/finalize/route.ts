@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { finalizeSummary } from "@/lib/coach-evaluate";
 import { isOpenAiApiKeyConfigured } from "@/lib/openai-config";
 import { getOpenAiErrorResponse, logOpenAiError } from "@/lib/openai-errors";
+import { logPerfElapsed, perfLog, startPerfTimer } from "@/lib/perf-log";
 import type { AiEvaluation, LabeledAnswer } from "@/types/record";
 
 interface FinalizeRequestBody {
@@ -9,6 +10,7 @@ interface FinalizeRequestBody {
   summaryEntries: LabeledAnswer[];
   aiEvaluation: AiEvaluation;
   coachAnswer: string | null;
+  userExampleFinal?: string | null;
 }
 
 function isValidAiEvaluation(ai: unknown): ai is AiEvaluation {
@@ -19,16 +21,22 @@ function isValidAiEvaluation(ai: unknown): ai is AiEvaluation {
 
 function isValidBody(body: unknown): body is FinalizeRequestBody {
   if (!body || typeof body !== "object") return false;
-  const { lessonId, summaryEntries, aiEvaluation, coachAnswer } = body as FinalizeRequestBody;
+  const { lessonId, summaryEntries, aiEvaluation, coachAnswer, userExampleFinal } =
+    body as FinalizeRequestBody;
   return (
     typeof lessonId === "string" &&
     Array.isArray(summaryEntries) &&
     isValidAiEvaluation(aiEvaluation) &&
-    (coachAnswer === null || typeof coachAnswer === "string")
+    (coachAnswer === null || typeof coachAnswer === "string") &&
+    (userExampleFinal === undefined ||
+      userExampleFinal === null ||
+      typeof userExampleFinal === "string")
   );
 }
 
 export async function POST(request: Request) {
+  const routeStartedAt = startPerfTimer();
+  perfLog("finalize", "server route start");
   try {
     if (!isOpenAiApiKeyConfigured()) {
       return NextResponse.json({ error: "api_key_not_configured" }, { status: 503 });
@@ -50,10 +58,13 @@ export async function POST(request: Request) {
       body.summaryEntries,
       body.aiEvaluation,
       body.coachAnswer,
+      body.userExampleFinal,
     );
 
+    logPerfElapsed("finalize", "server route total", routeStartedAt);
     return NextResponse.json(finalSummary);
   } catch (error) {
+    logPerfElapsed("finalize", "server route total (failed)", routeStartedAt);
     logOpenAiError("coach/finalize", error);
     const { status, code } = getOpenAiErrorResponse(error);
     return NextResponse.json({ error: code }, { status });

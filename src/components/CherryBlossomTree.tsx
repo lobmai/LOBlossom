@@ -1,18 +1,22 @@
 /** 淡い桜の木（背景装飾） */
 
-export function CherryBlossomTree() {
-
+export function CherryBlossomTree({
+  attached = false,
+}: {
+  attached?: boolean;
+}) {
   return (
-
     <div
-
       aria-hidden
-
-      className="pointer-events-none absolute inset-x-0 top-0 z-0 flex justify-center overflow-visible"
-
+      className={
+        attached
+          ? "pointer-events-none relative z-0 -mb-10 flex justify-center overflow-visible sm:-mb-12"
+          : "pointer-events-none absolute inset-x-0 top-0 z-0 flex justify-center overflow-visible"
+      }
     >
-
-      <div className="relative mt-2 flex justify-center">
+      <div
+        className={`relative flex justify-center ${attached ? "mt-0" : "mt-2"}`}
+      >
 
         <div className="absolute left-1/2 top-8 h-32 w-32 -translate-x-1/2 rounded-full bg-blossom-200/30 blur-2xl sm:top-10 sm:h-40 sm:w-40" />
 

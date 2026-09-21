@@ -32,11 +32,11 @@ export type StructuredCoachEvaluationFields = {
 
 /** Phase5b の AI プロンプトに含める「無理に指摘しない」ルール（文言） */
 export const COACH_EVAL_EMPTY_FIELD_RULES = [
-  "ユーザーが十分理解できている場合、gaps・misconceptions・nextQuestion を無理に作らない",
+  "ユーザーが十分理解できている場合、gaps・misconceptions を無理に作らない",
   "gaps は本当に不足があるときだけ。空配列 [] でよい",
   "misconceptions は本当に誤解があるときだけ。空配列 [] でよい",
-  "nextQuestion は追加確認が必要なときだけ。不要なら null",
-  "overallLevel が understood のときは gaps と misconceptions を空にし、nextQuestion は null にする",
+  "nextQuestion は使わない。必ず null",
+  "overallLevel が understood のときは gaps と misconceptions を空にする",
   "完璧を求めない。大きな誤解や重要点の抜けがなければ understood とする",
   "意味不明な文字列・1文字だけ・質問と無関係な回答・極端に情報不足の場合は overallLevel を insufficient とし、無理に understood にしない",
   "判断できない場合は strengths を空配列 [] にし、overallMessage でやさしく再回答を促す",

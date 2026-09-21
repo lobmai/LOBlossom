@@ -69,6 +69,18 @@ export function hasUnclearDetail(entries: Record<string, string>): boolean {
   return entries[UNCLEAR_CHOICE_ID] === "yes";
 }
 
+/** Step3で実際に書かれた疑問。なし／空欄なら null（AI回答不要） */
+export function getUnclearQuestionText(
+  entries: LabeledAnswer[] | Record<string, string>,
+): string | null {
+  const map = Array.isArray(entries)
+    ? Object.fromEntries(entries.map((e) => [e.id, e.answer]))
+    : entries;
+  if (map[UNCLEAR_CHOICE_ID] !== "yes") return null;
+  const detail = (map[UNCLEAR_DETAIL_ID] ?? "").trim();
+  return detail.length > 0 ? detail : null;
+}
+
 export function getMeaningFields(config: LessonSummaryConfig): SummaryInputField[] {
   return config.meaningFields ?? [];
 }

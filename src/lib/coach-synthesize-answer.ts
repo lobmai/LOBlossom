@@ -10,6 +10,24 @@ export function getMeaningfulUserAnswers(session: CoachSession): string[] {
     .filter((t) => t && !isStruggleAnswer(t) && isMeaningfulText(t));
 }
 
+/**
+ * myPointsFinal 用。1問目「いちばん大事だと思ったこと」への回答だけ。
+ * 2問目の意味確認回答は含めない。会話履歴自体は消さない。
+ */
+export function getMyPointsUserAnswersFromSession(
+  session: CoachSession,
+): string[] {
+  const followUpAt = session.exchanges.findIndex(
+    (e) => e.role === "coach" && e.kind === "followup-question",
+  );
+  const beforeFollowUp =
+    followUpAt === -1 ? session.exchanges : session.exchanges.slice(0, followUpAt);
+  return beforeFollowUp
+    .filter((e) => e.role === "user" && e.kind === "answer")
+    .map((e) => e.text.trim())
+    .filter((t) => t && !isStruggleAnswer(t) && isMeaningfulText(t));
+}
+
 type AmIsAreMapping = {
   iAm: boolean;
   isThird: boolean;
@@ -109,6 +127,53 @@ function summaryFromTeachExchange(teachText: string): string {
     .join("");
 }
 
+function looksLikeCompleteSentence(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (
+    /だと思(った|いました)|と思(った|います)|です[。]?$|ます[。]?$|だよ[。]?$|である[。]?$/u.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  return t.length >= 18 && /[。！？]/.test(t);
+}
+
+function stripTrailingPeriod(text: string): string {
+  return text.replace(/[。．.]+$/u, "").trim();
+}
+
+/** Lesson2：ユーザー発言だけを、復習用の短い文に整える（知識の足し込みなし） */
+function synthesizeL2CoachPoints(answers: string[]): string {
+  const cleaned = answers
+    .map((a) => stripTrailingPeriod(a.replace(/\s+/g, " ")))
+    .filter(Boolean);
+  if (cleaned.length === 0) return "";
+
+  const allFragments = cleaned.every(
+    (a) => a.length <= 24 && !looksLikeCompleteSentence(a),
+  );
+  const core = allFragments
+    ? cleaned.join("、")
+    : cleaned.map((a) => normalizeUserClause(a)).join("");
+  const stripped = stripTrailingPeriod(core);
+  if (!stripped) return "";
+
+  if (looksLikeCompleteSentence(stripped)) {
+    return normalizeUserClause(stripped);
+  }
+
+  if (/大事|重要|ポイント/.test(stripped)) {
+    if (/だ$|です$|ます$/.test(stripped)) {
+      return normalizeUserClause(stripped);
+    }
+    return `${stripped}だと思いました。`;
+  }
+
+  return `今回のレッスンでは、${stripped}が大事だと思いました。`;
+}
+
 /** 完成まとめ「私が大事だと思ったこと」用：会話から自然な1段落を組み立てる */
 export function synthesizeCoachPointsFromSession(
   session: CoachSession,
@@ -118,6 +183,9 @@ export function synthesizeCoachPointsFromSession(
   if (answers.length > 0) {
     if (lessonId === "lesson-01-be-verb") {
       return synthesizeL1CoachPoints(answers);
+    }
+    if (lessonId === "lesson-02-regular-verb") {
+      return synthesizeL2CoachPoints(answers);
     }
     return dedupeJoinClauses(
       answers.map((a) => normalizeUserClause(a)).filter(Boolean),

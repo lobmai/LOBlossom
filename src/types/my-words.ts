@@ -58,11 +58,11 @@ export interface MyWordUserEntry {
   lastReviewResult: ReviewResult | null;
 
   /**
-   * ユーザーが詳細画面で指定した表示状態（practicing / weak）。
+   * ユーザーが詳細画面で指定した表示状態（learned / practicing / weak）。
    * 自動判定の status / mastery / 履歴は変更しない。
    * 未指定または null のときは status（自動判定）を表示する。
    */
-  userStatusOverride?: "practicing" | "weak" | null;
+  userStatusOverride?: "learned" | "practicing" | "weak" | null;
 
   /** 将来：ユーザー作成例文 */
   userExamples?: UserWordExample[];

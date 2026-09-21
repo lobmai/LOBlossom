@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLayoutEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { SpeakButton } from "@/components/SpeakButton";
 import {
@@ -16,8 +16,10 @@ import {
 } from "@/lib/my-words/display";
 import { getDisplayedWordStatus } from "@/lib/my-words/display-status";
 import { saveMyWordsNavOrder } from "@/lib/my-words/nav-order";
+import { PageContentSkeleton } from "@/components/PageContentSkeleton";
 import { loadMyWords } from "@/lib/my-words/store";
 import { countTotalWords, countWordsByStatus } from "@/lib/my-words/stats";
+import { getSpecialLessonPath } from "@/lib/special-lessons/registry";
 import { LESSON_SELECT_PATH } from "@/lib/lessons/registry";
 import { ui } from "@/lib/ui-text";
 import type { MyWordUserEntry, WordStatus } from "@/types/my-words";
@@ -29,9 +31,15 @@ const ALL_VISIBLE: StatusVisibility = {
   weak: true,
 };
 
+const LESSON1_SPECIAL_PATH = getSpecialLessonPath(1);
+
 function readWords(): MyWordUserEntry[] | null {
   if (typeof window === "undefined") return null;
   return loadMyWords();
+}
+
+function stopCardNavigation(event: MouseEvent) {
+  event.stopPropagation();
 }
 
 export function MyWordsList() {
@@ -56,6 +64,7 @@ export function MyWordsList() {
     for (const id of ids) {
       router.prefetch(`/my-words/${encodeURIComponent(id)}`);
     }
+    router.prefetch(LESSON1_SPECIAL_PATH);
   }, [visibleWords, router]);
 
   function toggleStatus(status: WordStatus) {
@@ -66,7 +75,7 @@ export function MyWordsList() {
   }
 
   if (words === null) {
-    return null;
+    return <PageContentSkeleton rows={4} />;
   }
 
   const total = countTotalWords(words);
@@ -79,6 +88,7 @@ export function MyWordsList() {
         <p className="mt-4 text-sm text-gray-600">{ui.myWords.empty}</p>
         <Link
           href={LESSON_SELECT_PATH}
+          prefetch
           className="mt-6 inline-flex items-center justify-center rounded-xl bg-blossom-500 px-6 py-3 text-sm font-medium text-white transition hover:bg-blossom-600"
         >
           {ui.myWords.startLesson}
@@ -115,60 +125,70 @@ export function MyWordsList() {
               return (
                 <div
                   key={word.wordId}
-                  className="rounded-2xl border border-blossom-100 bg-white/80 p-4 shadow-sm transition hover:border-blossom-200 hover:bg-blossom-50/30"
+                  className="relative rounded-2xl border border-blossom-100 bg-white/80 p-4 shadow-sm transition hover:border-blossom-200 hover:bg-blossom-50/30"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <Link
-                          href={href}
-                          prefetch
-                          className="min-w-0 truncate font-mono text-lg font-bold text-gray-900"
-                        >
-                          {word.english}
-                        </Link>
-                        <SpeakButton
-                          audioRef={word.audioRef ?? `mywords.${word.wordId}`}
-                        />
-                      </div>
-                      <Link
-                        href={href}
-                        prefetch
-                        className="mt-1 block text-sm text-gray-600"
-                      >
-                        {word.japanese}
-                      </Link>
-                    </div>
-                    <span
-                      className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium ${getWordStatusBadgeClass(displayed)}`}
-                    >
-                      {getWordStatusLabel(displayed)}
-                    </span>
-                  </div>
-
                   <Link
                     href={href}
                     prefetch
-                    className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500"
-                  >
-                    <span>
-                      {ui.myWords.nextReview}：
+                    className="absolute inset-0 z-0 rounded-2xl"
+                    aria-label={`${word.english} の詳細`}
+                  />
+
+                  <div className="relative z-10 flex items-start gap-3">
+                    <div className="min-w-0 flex-1 pointer-events-none">
+                      <p className="truncate font-mono text-lg font-bold text-gray-900">
+                        {word.english}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-600">{word.japanese}</p>
+                    </div>
+                    <div className="pointer-events-none flex shrink-0 flex-col items-end gap-2">
                       <span
-                        className={
-                          reviewDue
-                            ? "font-medium text-blossom-600"
-                            : "text-gray-700"
-                        }
+                        className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getWordStatusBadgeClass(displayed)}`}
                       >
-                        {nextReviewLabel}
+                        {getWordStatusLabel(displayed)}
                       </span>
-                    </span>
-                    {reviewDue && (
-                      <span className="rounded-full bg-blossom-100 px-2 py-0.5 text-[10px] font-medium text-blossom-700">
-                        {ui.myWords.reviewDueHint}
+                      <div className="relative z-20 pointer-events-auto">
+                        <SpeakButton
+                          audioRef={word.audioRef ?? `mywords.${word.wordId}`}
+                          buttonClassName="h-11 w-11"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="relative z-10 mt-3 pointer-events-none">
+                    <p className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                      <span>
+                        {ui.myWords.nextReview}：
+                        <span
+                          className={
+                            reviewDue
+                              ? "font-medium text-blossom-600"
+                              : "text-gray-700"
+                          }
+                        >
+                          {nextReviewLabel}
+                        </span>
                       </span>
-                    )}
-                  </Link>
+                      {reviewDue && (
+                        <span className="rounded-full bg-blossom-100 px-2 py-0.5 text-[10px] font-medium text-blossom-700">
+                          {ui.myWords.reviewDueHint}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+
+                  {reviewDue && (
+                    <Link
+                      href={LESSON1_SPECIAL_PATH}
+                      prefetch
+                      onClick={stopCardNavigation}
+                      onPointerDown={stopCardNavigation}
+                      className="relative z-20 mt-3 inline-flex min-h-11 items-center rounded-xl border border-blossom-200 bg-white px-3 py-2 text-xs font-medium text-blossom-700 transition hover:bg-blossom-50"
+                    >
+                      {ui.myWords.reviewSpecialCta}
+                    </Link>
+                  )}
                 </div>
               );
             })}

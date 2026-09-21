@@ -17,11 +17,15 @@ import {
   isStruggleAnswer,
   pickDefaultRubricPointId,
 } from "../src/lib/coach-teach-hints";
-import { enforceFollowUpLimitForTest } from "../src/lib/coach-teach-evaluate";
 import {
-  COACH_COMPLETE_CLOSING_MESSAGE,
-  playThankYouSoundOnce,
-} from "../src/lib/coach-complete-celebration";
+  buildTeachEvaluateInput,
+  enforceFollowUpLimitForTest,
+  evaluateTeachAnswer,
+  getTeachEvaluateSystemPrompt,
+} from "../src/lib/coach-teach-evaluate";
+import { getAnswerInputPlaceholder } from "../src/lib/coach-teach-question";
+import { isOpenAiApiKeyConfigured } from "../src/lib/openai-config";
+import { playThankYouSoundOnce } from "../src/lib/coach-complete-celebration";
 import {
   applyRubricCoverageGate,
   detectMissingRubricFollowUp,
@@ -29,6 +33,7 @@ import {
   mentionsAmIsAreWithoutDetail,
 } from "../src/lib/coach-teach-coverage";
 import { lesson01CoachRubric } from "../src/lib/coach-rubric/lesson01";
+import { lesson02CoachRubric } from "../src/lib/coach-rubric/lesson02";
 import { validateLessonReadyForFinalize } from "../src/lib/lesson-finalize-validation";
 import { pickCoachQuestionForLesson } from "../src/lib/coach-question-picker";
 import { buildMyPointsPolishInput } from "../src/lib/polish-my-points";
@@ -108,8 +113,8 @@ const limited = enforceFollowUpLimitForTest(
 );
 ok("followUp blocked at count 1", limited.outcome !== "followup");
 ok(
-  "complete closing is fixed",
-  limited.closingMessage === COACH_COMPLETE_CLOSING_MESSAGE,
+  "complete closing is meaning-check",
+  limited.closingMessage === "わかった！教えてくれてありがとう！😊",
 );
 
 const completeWithParaphrase = enforceFollowUpLimitForTest(
@@ -126,7 +131,7 @@ const completeWithParaphrase = enforceFollowUpLimitForTest(
 );
 ok(
   "AI言い返しを使わない",
-  completeWithParaphrase.closingMessage === COACH_COMPLETE_CLOSING_MESSAGE,
+  completeWithParaphrase.closingMessage === "わかった！教えてくれてありがとう！😊",
 );
 
 let thankYouThrew = false;
@@ -289,6 +294,197 @@ ok(
   }).ready,
 );
 
-console.log("\n---");
-console.log(`Passed: ${passed}, Failed: ${failed}`);
-process.exit(failed > 0 ? 1 : 0);
+const l1Placeholder = getAnswerInputPlaceholder("lesson-01-be-verb");
+ok(
+  "L1 placeholder keeps am/is/are",
+  l1Placeholder === "例：am / is / are の使い分け",
+);
+
+const l2Placeholder = getAnswerInputPlaceholder("lesson-02-regular-verb");
+ok(
+  "L2 placeholder has no am/is/are",
+  !l2Placeholder.includes("am / is / are") &&
+    l2Placeholder.includes("like") &&
+    l2Placeholder.includes("play"),
+);
+
+const l2Question = pickCoachQuestionForLesson("lesson-02-regular-verb");
+ok(
+  "L2 question is 大事だと思ったこと",
+  l2Question.question ===
+    "今回のレッスンで、いちばん大事だと思ったことは何？教えて！" &&
+    !l2Question.question.includes("一般動詞ってなに？") &&
+    l2Question.keywords.includes("一般動詞") &&
+    l2Question.keywords.includes("3単現") &&
+    l2Question.keywords.includes("don't / doesn't"),
+);
+
+const l1Question = pickCoachQuestionForLesson("lesson-01-be-verb");
+ok(
+  "L1 question unchanged",
+  l1Question.question ===
+    "このレッスンで、いちばん大事なことって何？教えて！",
+);
+
+const l1System = getTeachEvaluateSystemPrompt("lesson-01-be-verb");
+ok(
+  "L1 teach-evaluate keeps be動詞 rules",
+  l1System.includes("be動詞レッスンの重要項目") &&
+    l1System.includes("am/is/are") &&
+    l1System.includes("I→am"),
+);
+ok(
+  "L1 teach に英文の意味確認ルールがある",
+  l1System.includes("この文はどんな意味"),
+);
+
+const l2System = getTeachEvaluateSystemPrompt("lesson-02-regular-verb");
+ok(
+  "L2 teach-evaluate has no be動詞固定指示",
+  !l2System.includes("be動詞レッスン") &&
+    !l2System.includes("am/is/are") &&
+    !l2System.includes("I→am") &&
+    l2System.includes("評価基準"),
+);
+ok(
+  "L2 teach にも英文の意味確認ルールがある",
+  l2System.includes("この文はどんな意味"),
+);
+
+const l1Input = buildTeachEvaluateInput({
+  lessonId: "lesson-01-be-verb",
+  initialQuestion: "いちばん大事なことって何？",
+  userAnswer: "be動詞です",
+  followUpCount: 0,
+  conversationHistory: [],
+  isFollowUpAnswer: false,
+});
+ok(
+  "L1 input rules keep am/is/are",
+  l1Input.includes("am/is/are") && l1Input.includes("I→am"),
+);
+
+const l2Input = buildTeachEvaluateInput({
+  lessonId: "lesson-02-regular-verb",
+  initialQuestion: "一般動詞ってなに？",
+  userAnswer: "動きや好きを表す",
+  followUpCount: 0,
+  conversationHistory: [],
+  isFollowUpAnswer: false,
+});
+ok(
+  "L2 input rules have no am/is/are",
+  !l2Input.includes("am/is/are") &&
+    !l2Input.includes("I→am") &&
+    l2Input.includes("評価基準"),
+);
+ok(
+  "L2 input にこのレッスンの英文例がある",
+  l2Input.includes("I like music."),
+);
+
+const missingL2 = detectMissingRubricFollowUp(
+  lesson02CoachRubric,
+  ["一般動詞は動きや好きを表す。like とか。"],
+  { isInitialAnswer: true },
+);
+ok(
+  "L2 followup is 一般動詞 rubric",
+  missingL2 != null &&
+    missingL2.pointId !== "am-is-are" &&
+    ["third-person-s", "general-negation", "general-question"].includes(
+      missingL2.pointId,
+    ),
+);
+
+function sessionWithAnswers(texts: string[]): CoachSession {
+  let s = createInitialCoachSession(
+    "今回のレッスンで、いちばん大事だと思ったことは何？教えて！",
+  );
+  for (const text of texts) {
+    s = appendExchange(s, { role: "user", kind: "answer", text });
+  }
+  return s;
+}
+
+const l2Feel = synthesizeCoachPointsFromSession(
+  sessionWithAnswers(["Feel"]),
+  "lesson-02-regular-verb",
+);
+ok(
+  "L2 Feel is not raw word",
+  l2Feel !== "Feel" &&
+    l2Feel !== "Feel。" &&
+    l2Feel.includes("Feel") &&
+    l2Feel.includes("大事"),
+);
+
+const l2Third = synthesizeCoachPointsFromSession(
+  sessionWithAnswers(["3単現が大事"]),
+  "lesson-02-regular-verb",
+);
+ok(
+  "L2 3単現 is a short sentence",
+  l2Third.includes("3単現が大事だと思いました") &&
+    !l2Third.includes("he / she"),
+);
+
+const l2Full = synthesizeCoachPointsFromSession(
+  sessionWithAnswers([
+    "he や she のときは動詞に s を付けることが大事だと思いました",
+  ]),
+  "lesson-02-regular-verb",
+);
+ok(
+  "L2 full sentence kept",
+  l2Full.includes("動詞に s を付ける") && l2Full.includes("だと思いました"),
+);
+
+const l1SynthUnchanged = synthesizeCoachPointsFromSession(
+  synthSession,
+  "lesson-01-be-verb",
+);
+ok(
+  "L1 synthesize still maps am/is/are",
+  l1SynthUnchanged.includes("Iにはam") &&
+    l1SynthUnchanged.includes("主語によって使い分ける"),
+);
+
+async function runLesson2ApiCheck() {
+  if (!isOpenAiApiKeyConfigured()) {
+    console.log("⏭ Lesson2 teach-evaluate API（キー未設定のためスキップ）");
+    return;
+  }
+
+  try {
+    const result = await evaluateTeachAnswer({
+      lessonId: "lesson-02-regular-verb",
+      initialQuestion: "一般動詞ってなに？",
+      userAnswer:
+        "一般動詞は動きや好きを表すよ。like や play。he のときは likes みたいに s を付ける。否定は don't と doesn't。疑問は Do と Does。",
+      followUpCount: 0,
+      conversationHistory: [
+        { role: "coach", text: "一般動詞ってなに？" },
+      ],
+      isFollowUpAnswer: false,
+    });
+    const okOutcome = ["complete", "followup", "teach"].includes(result.outcome);
+    ok("L2 teach-evaluate API succeeds", okOutcome);
+    if (result.followUpQuestion) {
+      ok(
+        "L2 API followup is not am/is/are",
+        !/am\s*[\/・]\s*is/i.test(result.followUpQuestion) &&
+          !result.followUpQuestion.includes("be動詞を主語の前"),
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    ok("L2 teach-evaluate API succeeds", false, message);
+  }
+}
+
+void runLesson2ApiCheck().then(() => {
+  console.log("\n---");
+  console.log(`Passed: ${passed}, Failed: ${failed}`);
+  process.exit(failed > 0 ? 1 : 0);
+});

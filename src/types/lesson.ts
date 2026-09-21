@@ -44,6 +44,8 @@ export interface LessonMeta {
   title: string;
   subtitle: string;
   readingMinutes: number;
+  /** 表示用の難易度ラベル（例：中級）。未指定なら出さない */
+  levelLabel?: string;
 }
 
 /** @deprecated SummarySection を使用 */
